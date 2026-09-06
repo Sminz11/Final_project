@@ -1,0 +1,77 @@
+import { Routes, Router } from '@angular/router';
+import { inject } from '@angular/core';
+import { AuthService } from '@auth0/auth0-angular';
+import { map, switchMap, catchError } from 'rxjs/operators';
+import { of } from 'rxjs';
+
+import { DashboardComponent } from './dashboard/dashboard.component'; 
+import { CreateRequestComponent } from './components/create-request/create-request.component';
+import { ApproverDashboardComponent } from './components/approver-dashboard/approver-dashboard.component';
+import { AdminAuditLogComponent } from './components/admin-audit-log/admin-audit-log.component';
+import { permissionGuard } from './permission.guard';
+
+// Guard เช็ก Permissions จาก Token เพื่อ Redirect หน้าแรกสุด
+export const initialRedirectGuard = () => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+
+  return auth.getAccessTokenSilently().pipe(
+    map(token => {
+      try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(
+          atob(base64)
+            .split('')
+            .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+            .join('')
+        );
+        
+        const payload = JSON.parse(jsonPayload);
+        const permissions: string[] = payload.permissions || [];
+
+        // ถ้าเป็น Approver ให้ไปหน้า approver-dashboard
+        if (permissions.includes('read:pending_requests')) {
+          return router.createUrlTree(['/approver-dashboard']);
+        }
+
+        // ถ้าเป็น Admin ให้ไปหน้า admin-audit-log
+        if (permissions.includes('read:audit_logs')) {
+          return router.createUrlTree(['/admin-audit-log']);
+        }
+
+        // ผู้ใช้ทั่วไป ไปหน้า dashboard
+        return router.createUrlTree(['/dashboard']);
+      } catch (e) {
+        return router.createUrlTree(['/dashboard']);
+      }
+    }),
+    catchError(() => of(router.createUrlTree(['/dashboard'])))
+  );
+};
+
+export const routes: Routes = [
+  // เข้า URL เปล่า ให้ผ่าน initialRedirectGuard
+  { 
+    path: '', 
+    canActivate: [initialRedirectGuard], 
+    children: [] 
+  },
+  
+  { path: 'dashboard', component: DashboardComponent },
+  { path: 'create-request', component: CreateRequestComponent },
+  
+  { 
+    path: 'approver-dashboard', 
+    component: ApproverDashboardComponent, 
+    canActivate: [permissionGuard('read:pending_requests')] 
+  },
+  { 
+    path: 'admin-audit-log', 
+    component: AdminAuditLogComponent, 
+    canActivate: [permissionGuard('read:audit_logs')] 
+  },
+  
+  // เปลี่ยน Wildcard ให้ Redirect ไปที่หน้าแรก ('') เพื่อให้ Guard ทำงานใหม่
+  { path: '**', redirectTo: '' }
+];

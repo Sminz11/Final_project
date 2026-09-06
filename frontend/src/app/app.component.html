@@ -1,0 +1,100 @@
+<div class="app-container">
+  <header class="navbar">
+    <div class="nav-brand">
+      <div class="logo-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+        </svg>
+      </div>
+      <span class="brand-name">Portal<strong>Hub</strong></span>
+
+      <!-- เมนู Navigation ตาม Permission/Role -->
+      <nav class="nav-links" *ngIf="auth.isAuthenticated$ | async" style="margin-left: 2rem; display: flex; gap: 1rem;">
+        <!-- แสดงเฉพาะ User ปกติ (ซ่อนถ้าเป็น Approver หรือ Admin) -->
+        <a *ngIf="!hasPermission('read:pending_requests') && !hasPermission('read:audit_logs')" 
+           routerLink="/dashboard" 
+           routerLinkActive="active" 
+           class="nav-item">
+           คำขอของฉัน
+        </a>
+        
+        <!-- แสดงเฉพาะ Approver -->
+        <a *ngIf="hasPermission('read:pending_requests')" 
+           routerLink="/approver-dashboard" 
+           routerLinkActive="active" 
+           class="nav-item">
+           รายการรออนุมัติ
+        </a>
+        
+        <!-- แสดงเฉพาะ Admin -->
+        <a *ngIf="hasPermission('read:audit_logs')" 
+           routerLink="/admin-audit-log" 
+           routerLinkActive="active" 
+           class="nav-item">
+           Audit Logs
+        </a>
+      </nav>
+    </div>
+
+    <ng-container *ngIf="auth.isLoading$ | async; else authLoaded">
+      <div class="loading-tag">กำลังตรวจสอบสิทธิ์...</div>
+    </ng-container>
+
+    <ng-template #authLoaded>
+      <ng-container *ngIf="auth.isAuthenticated$ | async; else navLoggedOut">
+        <div class="user-profile-bar" *ngIf="auth.user$ | async as user">
+          <div class="user-avatar-wrapper">
+            <img *ngIf="user.picture; else textAvatar" [src]="user.picture" alt="Avatar" class="avatar-img" />
+            <ng-template #textAvatar>
+              <div class="text-avatar">{{ user.name?.charAt(0) || 'U' }}</div>
+            </ng-template>
+            <span class="status-indicator"></span>
+          </div>
+          <div class="user-info">
+            <span class="user-name">{{ user.name }}</span>
+            <span class="user-email">{{ user.email }}</span>
+          </div>
+          <button (click)="logout()" class="btn-logout" title="Log Out">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+            <span>ออกจากระบบ</span>
+          </button>
+        </div>
+      </ng-container>
+
+      <ng-template #navLoggedOut>
+        <button (click)="login()" class="btn-primary-sm">
+          Sign In
+        </button>
+      </ng-template>
+    </ng-template>
+  </header>
+
+  <main class="main-content">
+    <ng-container *ngIf="auth.isLoading$ | async; else contentLoaded">
+      <div class="loading-container">
+        <div class="spinner"></div>
+        <p>กำลังโหลดข้อมูล...</p>
+      </div>
+    </ng-container>
+
+    <ng-template #contentLoaded>
+      <ng-container *ngIf="auth.isAuthenticated$ | async; else heroLogin">
+        <router-outlet></router-outlet>
+      </ng-container>
+
+      <ng-template #heroLogin>
+        <div class="hero-container">
+          <div class="hero-card">
+            <div class="hero-badge">Auth0 Authentication</div>
+            <h1>ยินดีต้อนรับสู่ระบบบริหารจัดการ</h1>
+            <p>เข้าสู่ระบบด้วย Auth0 เพื่อเข้าถึงแดชบอร์ดและข้อมูลส่วนตัวของคุณอย่างปลอดภัย</p>
+            <button (click)="login()" class="btn-hero">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
+              เข้าสู่ระบบตอนนี้
+            </button>
+          </div>
+        </div>
+      </ng-template>
+    </ng-template>
+  </main>
+</div>

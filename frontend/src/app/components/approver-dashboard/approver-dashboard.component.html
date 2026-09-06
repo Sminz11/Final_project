@@ -1,0 +1,149 @@
+<div class="dashboard-container">
+  <div class="dashboard-content">
+    
+    <!-- Header Bar -->
+    <div class="dash-header">
+      <div>
+        <h1 class="dash-title">รายการรออนุมัติ (Approver Management)</h1>
+        <p class="dash-subtitle">จัดการและติดตามสถานะคำขออนุมัติสิทธิ์เข้าใช้งานระบบของผู้ใช้</p>
+      </div>
+    </div>
+
+    <!-- Main Card -->
+    <div class="dash-card">
+      
+      <!-- Card Header -->
+      <div class="card-head">
+        <div class="card-title-group">
+          <div class="card-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M12.736 3.97a.733.733 0 0 1 1.047 0c.286.289.29.756.01 1.05L7.88 12.01a.733.733 0 0 1-1.065.02L3.217 8.384a.757.757 0 0 1 0-1.06.733.733 0 0 1 1.047 0l3.052 3.093 5.4-6.425a.247.247 0 0 1 .02-.022Z"/>
+            </svg>
+          </div>
+          <h3>รายการคำขอที่รอการอนุมัติ</h3>
+        </div>
+        <button class="btn-refresh" (click)="loadPendingRequests()">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" style="margin-right: 4px;">
+            <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
+            <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
+          </svg>
+          รีเฟรชตาราง
+        </button>
+      </div>
+
+      <!-- Card Body -->
+      <div class="card-body">
+        
+        <!-- Filter Bar -->
+        <div class="filter-grid">
+          <div class="search-box">
+            <span class="search-icon">🔍</span>
+            <input 
+              type="text" 
+              class="input-search" 
+              placeholder="ค้นหารหัสคำขอ, Auth ID, EMAIL, หัวข้อ, ระบบ..."
+              [(ngModel)]="searchTerm"
+              (input)="applyFilter()">
+          </div>
+          <div>
+            <select class="select-status" [(ngModel)]="selectedType" (change)="applyFilter()">
+              <option value="">ประเภททั้งหมด</option>
+              <option value="DATABASE">DATABASE</option>
+              <option value="SERVER">SERVER</option>
+              <option value="APPLICATION">APPLICATION</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Table Container -->
+        <div class="table-container">
+          <table class="custom-table">
+            <thead>
+              <tr>
+                <th>รหัสคำขอ</th>
+                <th>AUTH ID</th>
+                <th>EMAIL</th>
+                <th>หัวข้อคำขอ</th>
+                <th>ประเภท</th>
+                <th>ระบบที่ขอ</th>
+                <th>สถานะ</th>
+                <th class="text-center">จัดการ</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let item of filteredRequests">
+                <td class="req-code">{{ item.request_code || 'REQ-2026-00000' + item.id }}</td>
+                <td>
+                  <span class="auth-id-badge">{{ item.user_id }}</span>
+                </td>
+                <td class="user-email-cell">
+                  {{ item.display_email }}
+                </td>
+                <td class="req-title">{{ item.title }}</td>
+                
+                <!-- ผูก Dynamic Class เพื่อแยกสีตาม request_type -->
+                <td>
+                  <span class="type-badge" 
+                        [ngClass]="{
+                          'type-db': (item.request_type | uppercase)?.trim() === 'DATABASE',
+                          'type-server': (item.request_type | uppercase)?.trim() === 'SERVER',
+                          'type-app': (item.request_type | uppercase)?.trim() === 'APPLICATION'
+                        }">
+                    {{ item.request_type || 'DATABASE' }}
+                  </span>
+                </td>
+
+                <td class="target-sys">{{ item.target_system }}</td>
+                <td>
+                  <span class="status-badge pending">PENDING</span>
+                </td>
+                <td class="text-center">
+                  <div class="action-buttons">
+                    <button 
+                      class="btn-action approve" 
+                      (click)="approveRequest(item.id, item.request_code || item.id)">
+                      อนุมัติ
+                    </button>
+                    <button 
+                      class="btn-action reject" 
+                      (click)="rejectRequest(item.id, item.request_code || item.id)">
+                      ปฏิเสธ
+                    </button>
+                  </div>
+                </td>
+              </tr>
+
+              <!-- Empty State -->
+              <tr *ngIf="!loading && filteredRequests.length === 0">
+                <td colspan="8" class="empty-state">
+                  ไม่มีรายการคำขอที่รอการอนุมัติในขณะนี้
+                </td>
+              </tr>
+
+              <!-- Loading State -->
+              <tr *ngIf="loading">
+                <td colspan="8" class="loading-state">
+                  กำลังโหลดข้อมูลรายการรออนุมัติ...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination Footer -->
+        <div class="pagination-footer" *ngIf="!loading && filteredRequests.length > 0">
+          <div class="pagination-info">
+            แสดง 1 ถึง {{ filteredRequests.length }} จากทั้งหมด {{ filteredRequests.length }} รายการ
+          </div>
+          <div class="pagination-buttons">
+            <button class="btn-pagination" disabled>ก่อนหน้า</button>
+            <span class="page-indicator">หน้า 1 / 1</span>
+            <button class="btn-pagination" disabled>ถัดไป</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>

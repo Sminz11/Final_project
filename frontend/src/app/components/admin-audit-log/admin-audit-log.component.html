@@ -1,0 +1,139 @@
+<div class="audit-container">
+  <div class="audit-header">
+    <div>
+      <h2 class="audit-title">Admin Audit Log</h2>
+      <p class="audit-subtitle">บันทึกประวัติการใช้งานและทำรายการทั้งหมดในระบบ</p>
+    </div>
+    <button (click)="exportToCSV()" *ngIf="filteredLogs.length > 0" class="btn-export">
+      Export CSV
+    </button>
+  </div>
+
+  <!-- Filter Bar -->
+  <div class="filter-card">
+    <div class="filter-group">
+      <input 
+        type="text" 
+        class="filter-input" 
+        placeholder="ค้นหาด้วย Email, Auth ID, Details..." 
+        [(ngModel)]="searchTerm" 
+        (input)="applyFilter()"
+      />
+      
+      <select class="filter-select" [(ngModel)]="selectedAction" (change)="applyFilter()">
+        <option value="ALL">สถานะทั้งหมด (Actions)</option>
+        <option value="CREATE_DRAFT">CREATE_DRAFT</option>
+        <option value="SUBMIT">SUBMIT</option>
+        <option value="APPROVE">APPROVE</option>
+        <option value="REJECT">REJECT</option>
+      </select>
+
+      <div class="date-group">
+        <input type="date" class="filter-date" [(ngModel)]="startDate" (change)="applyFilter()" />
+        <span>ถึง</span>
+        <input type="date" class="filter-date" [(ngModel)]="endDate" (change)="applyFilter()" />
+      </div>
+
+      <button class="btn-reset" (click)="resetFilters()">ล้างตัวกรอง</button>
+    </div>
+  </div>
+
+  <div *ngIf="loading" class="loading-state">
+    กำลังโหลดข้อมูล...
+  </div>
+
+  <!-- Table View -->
+  <div *ngIf="!loading">
+    <div class="table-wrapper" *ngIf="pagedLogs.length > 0">
+      <table class="audit-table">
+        <thead>
+          <tr>
+            <th style="width: 60px;">ID</th>
+            <th>Auth ID</th>
+            <th>Email</th>
+            <th>User</th>
+            <th style="width: 150px;">Action</th>
+            <th style="width: 170px;">Timestamp</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- เพิ่ม (click) และ cursor-pointer บน tr เพื่อให้กดเปิด Modal ได้ -->
+          <tr *ngFor="let log of pagedLogs" (click)="openDetailModal(log)" class="log-row">
+            <td>{{ log.id }}</td>
+            <td><code class="user-id-code">{{ log.user_id }}</code></td>
+            <td>{{ log.email }}</td>
+            <td>{{ log.user }}</td>
+            <td>
+              <span [class]="'badge-action ' + getActionClass(log.action)">
+                {{ log.action }}
+              </span>
+            </td>
+            <td>{{ log.timestamp }}</td>
+            <td>{{ log.details }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Empty State -->
+    <div *ngIf="filteredLogs.length === 0" class="empty-state">
+      ไม่พบข้อมูล Audit Log ที่ตรงตามเงื่อนไข
+    </div>
+
+    <!-- Pagination Controls -->
+    <div class="pagination-wrapper" *ngIf="filteredLogs.length > 0">
+      <div class="pagination-info">
+        แสดง {{ (currentPage - 1) * pageSize + 1 }} ถึง {{ minItemCount }} จากทั้งหมด {{ filteredLogs.length }} รายการ
+      </div>
+      <div class="pagination-buttons">
+        <button [disabled]="currentPage === 1" (click)="changePage(currentPage - 1)">ก่อนหน้า</button>
+        <span class="page-number">หน้า {{ currentPage }} / {{ totalPages }}</span>
+        <button [disabled]="currentPage === totalPages" (click)="changePage(currentPage + 1)">ถัดไป</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detail Modal -->
+  <div *ngIf="showModal" class="modal-backdrop" (click)="closeDetailModal()">
+    <div class="modal-card" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3 class="modal-title">Audit Log Details #{{ selectedLog?.id }}</h3>
+        <button (click)="closeDetailModal()" class="modal-close-btn">&times;</button>
+      </div>
+
+      <div class="modal-body" *ngIf="selectedLog">
+        <div class="detail-item">
+          <span class="detail-label">Auth ID (Sub):</span>
+          <code class="user-id-code">{{ selectedLog.user_id }}</code>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">Email:</span>
+          <span>{{ selectedLog.email }}</span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">User Role:</span>
+          <span>{{ selectedLog.user }}</span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">Action:</span>
+          <span [class]="'badge-action ' + getActionClass(selectedLog.action)">
+            {{ selectedLog.action }}
+          </span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">Timestamp:</span>
+          <span>{{ selectedLog.timestamp }}</span>
+        </div>
+        <div class="detail-box">
+          <span class="detail-label block">Details:</span>
+          <p class="detail-text">{{ selectedLog.details }}</p>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button (click)="closeDetailModal()" class="btn-close">ปิดหน้าต่าง</button>
+      </div>
+    </div>
+  </div>
+</div>
