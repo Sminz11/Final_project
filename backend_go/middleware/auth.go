@@ -126,15 +126,25 @@ func RequirePermission(requiredPermission string) gin.HandlerFunc {
 		emailStr = strings.ToLower(emailStr)
 
 		// ให้สิทธิ์ Approver อัตโนมัติหากเป็นบัญชี approver
-		if requiredPermission == "read:pending_requests" && strings.Contains(emailStr, "approver") {
-			c.Next()
-			return
+		if strings.Contains(emailStr, "approver") {
+			if requiredPermission == "read:pending_requests" ||
+				requiredPermission == "approve:requests" ||
+				requiredPermission == "reject:requests" {
+				c.Next()
+				return
+			}
 		}
 
 		// ให้สิทธิ์ Admin อัตโนมัติหากเป็นบัญชี admin
-		if (requiredPermission == "read:audit_logs" || requiredPermission == "read:all_requests") && strings.Contains(emailStr, "admin") {
-			c.Next()
-			return
+		if strings.Contains(emailStr, "admin") {
+			if requiredPermission == "read:audit_logs" ||
+				requiredPermission == "read:all_requests" ||
+				requiredPermission == "read:pending_requests" ||
+				requiredPermission == "approve:requests" ||
+				requiredPermission == "reject:requests" {
+				c.Next()
+				return
+			}
 		}
 
 		// ----------------------------------------------------

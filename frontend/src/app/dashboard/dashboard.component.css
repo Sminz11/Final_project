@@ -55,6 +55,7 @@
   color: #00a3e0;
   background: linear-gradient(120deg, #00a3e0 0%, #0288d1 100%);
   -webkit-background-clip: text;
+  background-clip: text; /* <-- เพิ่มบรรทัดนี้เพื่อลบ Warning */
   -webkit-text-fill-color: transparent;
 }
 

@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { HttpClientModule, HttpClient, HttpHeaders } from '@angular/common/http';
 import { RouterModule } from '@angular/router';
 import { AuthService } from '@auth0/auth0-angular';
-import { catchError, of } from 'rxjs';
+import { catchError, of, combineLatest } from 'rxjs';
 
 @Component({
   selector: 'app-admin-audit-log',
@@ -51,10 +51,21 @@ export class AdminAuditLogComponent implements OnInit {
   fetchAuditLogs(): void {
     this.loading = true;
 
-    this.auth.getAccessTokenSilently().pipe(
-      catchError(() => of(null))
-    ).subscribe((token) => {
-      const headers = token ? new HttpHeaders({ 'Authorization': `Bearer ${token}` }) : new HttpHeaders();
+    // ดึงทั้ง Access Token และ User Profile จาก Auth0 พร้อมกัน
+    combineLatest([
+      this.auth.getAccessTokenSilently().pipe(catchError(() => of(null))),
+      this.auth.user$.pipe(catchError(() => of(null)))
+    ]).subscribe(([token, user]) => {
+      let headers = new HttpHeaders();
+
+      if (token) {
+        headers = headers.set('Authorization', `Bearer ${token}`);
+      }
+      
+      // ส่ง X-User-Email ไปให้ Backend เพื่อใช้ยืนยันสิทธิ์ Admin Fallback
+      if (user && user.email) {
+        headers = headers.set('X-User-Email', user.email);
+      }
 
       // ดึงข้อมูลจาก Go Backend Endpoint: /api/v1/admin/audit-logs
       this.http.get<any[]>('http://localhost:8080/api/v1/admin/audit-logs', { headers }).pipe(

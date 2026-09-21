@@ -72,6 +72,16 @@ func initDB() {
 	log.Println("เชื่อมต่อ PostgreSQL เรียบร้อยแล้ว!")
 }
 
+// Helper function ช่วยดึง Email จาก Gin Context อย่างปลอดภัย
+func getUserEmail(c *gin.Context) string {
+	if emailVal, ok := c.Get("user_email"); ok {
+		if emailStr, ok := emailVal.(string); ok {
+			return emailStr
+		}
+	}
+	return ""
+}
+
 func logAudit(actorSub string, actorEmail string, action string, requestID uint, details string) {
 	DB.Create(&AuditLog{
 		ActorSub:        actorSub,
@@ -92,13 +102,7 @@ func createRequestHandler(c *gin.Context) {
 		return
 	}
 	userID := userIDVal.(string)
-
-	userEmail := ""
-	if emailVal, ok := c.Get("user_email"); ok {
-		if emailStr, ok := emailVal.(string); ok {
-			userEmail = emailStr
-		}
-	}
+	userEmail := getUserEmail(c)
 
 	var input CreateRequestInput
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -132,7 +136,7 @@ func createRequestHandler(c *gin.Context) {
 func updateDraftHandler(c *gin.Context) {
 	userIDVal, _ := c.Get("user_id")
 	userID := userIDVal.(string)
-	userEmail, _ := c.Get("user_email")
+	userEmail := getUserEmail(c)
 	id := c.Param("id")
 
 	var req Request
@@ -170,14 +174,14 @@ func updateDraftHandler(c *gin.Context) {
 	}
 
 	DB.Save(&req)
-	logAudit(userID, fmt.Sprint(userEmail), "UPDATE_DRAFT", req.ID, fmt.Sprintf("Updated draft request %s", req.ReqCode))
+	logAudit(userID, userEmail, "UPDATE_DRAFT", req.ID, fmt.Sprintf("Updated draft request %s", req.ReqCode))
 	c.JSON(http.StatusOK, req)
 }
 
 func submitRequestHandler(c *gin.Context) {
 	userIDVal, _ := c.Get("user_id")
 	userID := userIDVal.(string)
-	userEmail, _ := c.Get("user_email")
+	userEmail := getUserEmail(c)
 	id := c.Param("id")
 
 	var req Request
@@ -200,7 +204,7 @@ func submitRequestHandler(c *gin.Context) {
 	req.SubmittedAt = &now
 	DB.Save(&req)
 
-	logAudit(userID, fmt.Sprint(userEmail), "SUBMIT", req.ID, fmt.Sprintf("Submitted request %s", req.ReqCode))
+	logAudit(userID, userEmail, "SUBMIT", req.ID, fmt.Sprintf("Submitted request %s", req.ReqCode))
 	c.JSON(http.StatusOK, req)
 }
 
@@ -221,7 +225,7 @@ func getPendingRequestsHandler(c *gin.Context) {
 func approveRequestHandler(c *gin.Context) {
 	userIDVal, _ := c.Get("user_id")
 	userID := userIDVal.(string)
-	userEmail, _ := c.Get("user_email")
+	userEmail := getUserEmail(c)
 	id := c.Param("id")
 
 	var req Request
@@ -239,14 +243,14 @@ func approveRequestHandler(c *gin.Context) {
 	req.ApprovedBySub = userID
 	DB.Save(&req)
 
-	logAudit(userID, fmt.Sprint(userEmail), "APPROVE", req.ID, fmt.Sprintf("Approved request %s", req.ReqCode))
+	logAudit(userID, userEmail, "APPROVE", req.ID, fmt.Sprintf("Approved request %s", req.ReqCode))
 	c.JSON(http.StatusOK, req)
 }
 
 func rejectRequestHandler(c *gin.Context) {
 	userIDVal, _ := c.Get("user_id")
 	userID := userIDVal.(string)
-	userEmail, _ := c.Get("user_email")
+	userEmail := getUserEmail(c)
 	id := c.Param("id")
 
 	var input RejectInput
@@ -271,7 +275,7 @@ func rejectRequestHandler(c *gin.Context) {
 	req.ApprovedBySub = userID
 	DB.Save(&req)
 
-	logAudit(userID, fmt.Sprint(userEmail), "REJECT", req.ID, fmt.Sprintf("Rejected request %s: %s", req.ReqCode, input.RejectReason))
+	logAudit(userID, userEmail, "REJECT", req.ID, fmt.Sprintf("Rejected request %s: %s", req.ReqCode, input.RejectReason))
 	c.JSON(http.StatusOK, req)
 }
 
@@ -312,7 +316,7 @@ func main() {
 	{
 		v1.GET("/protected", func(c *gin.Context) {
 			userID, _ := c.Get("user_id")
-			c.JSON(http.StatusCreated, gin.H{
+			c.JSON(http.StatusOK, gin.H{
 				"message": "เชื่อมต่อ Backend API สำเร็จ",
 				"status":  "success",
 				"user_id": userID,
