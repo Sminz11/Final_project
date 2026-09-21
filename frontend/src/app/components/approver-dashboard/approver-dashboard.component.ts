@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { HttpClientModule, HttpClient, HttpHeaders } from '@angular/common/http';
 import { Router, RouterModule } from '@angular/router';
 import { AuthService } from '@auth0/auth0-angular';
+import { combineLatest, take } from 'rxjs';
 import Swal from 'sweetalert2';
 
 @Component({
@@ -35,36 +36,53 @@ export class ApproverDashboardComponent implements OnInit {
     this.loadPendingRequests();
   }
 
-  loadPendingRequests() {
-    this.loading = true;
-    this.auth.getAccessTokenSilently().subscribe({
-      next: (token) => {
-        const headers = new HttpHeaders({ 'Authorization': `Bearer ${token}` });
-        // แก้ไข URL ให้ระบุ /v1
-        this.http.get<any[]>('http://localhost:8080/api/v1/approvals/pending', { headers }).subscribe({
-          next: (res) => {
-            this.pendingRequests = res.map(item => {
-              const rawEmail = item.user_email || item.email || item.requester_email || '';
-              const isRealEmail = rawEmail.includes('@');
-
-              return {
-                ...item,
-                display_email: isRealEmail ? rawEmail : 'user01@test.com'
-              };
-            });
-            this.applyFilter();
-            this.loading = false;
-          },
-          error: (err) => {
-            console.error('Fetch pending requests error:', err);
-            this.loading = false;
-          }
+  // Helper สำหรับสร้าง Headers ที่แนบทั้ง Bearer Token และ X-User-Email
+  private getAuthHeaders(callback: (headers: HttpHeaders) => void) {
+    combineLatest([
+      this.auth.getAccessTokenSilently(),
+      this.auth.user$
+    ]).pipe(take(1)).subscribe({
+      next: ([token, user]) => {
+        let headers = new HttpHeaders({
+          'Authorization': `Bearer ${token}`
         });
+
+        if (user && user.email) {
+          headers = headers.set('X-User-Email', user.email);
+        }
+
+        callback(headers);
       },
       error: (err) => {
-        console.error('Token Error:', err);
+        console.error('Auth Header Error:', err);
         this.loading = false;
       }
+    });
+  }
+
+  loadPendingRequests() {
+    this.loading = true;
+    this.getAuthHeaders((headers) => {
+      this.http.get<any[]>('http://localhost:8080/api/v1/approvals/pending', { headers }).subscribe({
+        next: (res) => {
+          this.pendingRequests = res.map(item => {
+            // ดึงค่า requester_email จาก Backend เป็นหลัก
+            const rawEmail = item.requester_email || item.user_email || item.email || '';
+
+            return {
+              ...item,
+              // แสดงอีเมลจริงที่ทำรายการเข้ามา หากไม่มีให้ใช้ user_id
+              display_email: rawEmail || item.user_id || 'N/A'
+            };
+          });
+          this.applyFilter();
+          this.loading = false;
+        },
+        error: (err) => {
+          console.error('Fetch pending requests error:', err);
+          this.loading = false;
+        }
+      });
     });
   }
 
@@ -128,73 +146,61 @@ export class ApproverDashboardComponent implements OnInit {
   }
 
   private sendApprove(id: number) {
-    this.auth.getAccessTokenSilently().subscribe({
-      next: (token) => {
-        const headers = new HttpHeaders({
-          'Authorization': `Bearer ${token}`
-        });
-
-        this.http.post(`http://localhost:8080/api/v1/requests/${id}/approve`, {}, { headers }).subscribe({
-          next: () => {
-            Swal.fire({
-              title: 'สำเร็จ!',
-              text: 'อนุมัติรายการเรียบร้อยแล้ว',
-              icon: 'success',
-              confirmButtonText: 'ตกลง',
-              confirmButtonColor: '#00a3e0'
-            }).then(() => {
-              this.loadPendingRequests();
-            });
-          },
-          error: (err) => {
-            console.error('Approve Error:', err);
-            Swal.fire({
-              title: 'เกิดข้อผิดพลาด',
-              text: err.error?.error || err.error?.message || 'ไม่สามารถอนุมัติรายการได้',
-              icon: 'error',
-              confirmButtonText: 'ตกลง',
-              confirmButtonColor: '#00a3e0'
-            });
-          }
-        });
-      }
+    this.getAuthHeaders((headers) => {
+      this.http.post(`http://localhost:8080/api/v1/requests/${id}/approve`, {}, { headers }).subscribe({
+        next: () => {
+          Swal.fire({
+            title: 'สำเร็จ!',
+            text: 'อนุมัติรายการเรียบร้อยแล้ว',
+            icon: 'success',
+            confirmButtonText: 'ตกลง',
+            confirmButtonColor: '#00a3e0'
+          }).then(() => {
+            this.loadPendingRequests();
+          });
+        },
+        error: (err) => {
+          console.error('Approve Error:', err);
+          Swal.fire({
+            title: 'เกิดข้อผิดพลาด',
+            text: err.error?.error || err.error?.message || 'ไม่สามารถอนุมัติรายการได้',
+            icon: 'error',
+            confirmButtonText: 'ตกลง',
+            confirmButtonColor: '#00a3e0'
+          });
+        }
+      });
     });
   }
 
   private sendReject(id: number, rejectReason: string) {
-    this.auth.getAccessTokenSilently().subscribe({
-      next: (token) => {
-        const headers = new HttpHeaders({
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        });
+    this.getAuthHeaders((headers) => {
+      const jsonHeaders = headers.set('Content-Type', 'application/json');
+      const payload = { reject_reason: rejectReason };
 
-        const payload = { reject_reason: rejectReason };
-
-        this.http.post(`http://localhost:8080/api/v1/requests/${id}/reject`, payload, { headers }).subscribe({
-          next: () => {
-            Swal.fire({
-              title: 'สำเร็จ!',
-              text: 'ปฏิเสธรายการเรียบร้อยแล้ว',
-              icon: 'success',
-              confirmButtonText: 'ตกลง',
-              confirmButtonColor: '#00a3e0'
-            }).then(() => {
-              this.loadPendingRequests();
-            });
-          },
-          error: (err) => {
-            console.error('Reject Error:', err);
-            Swal.fire({
-              title: 'เกิดข้อผิดพลาด',
-              text: err.error?.error || err.error?.message || 'ไม่สามารถปฏิเสธรายการได้',
-              icon: 'error',
-              confirmButtonText: 'ตกลง',
-              confirmButtonColor: '#00a3e0'
-            });
-          }
-        });
-      }
+      this.http.post(`http://localhost:8080/api/v1/requests/${id}/reject`, payload, { headers: jsonHeaders }).subscribe({
+        next: () => {
+          Swal.fire({
+            title: 'สำเร็จ!',
+            text: 'ปฏิเสธรายการเรียบร้อยแล้ว',
+            icon: 'success',
+            confirmButtonText: 'ตกลง',
+            confirmButtonColor: '#00a3e0'
+          }).then(() => {
+            this.loadPendingRequests();
+          });
+        },
+        error: (err) => {
+          console.error('Reject Error:', err);
+          Swal.fire({
+            title: 'เกิดข้อผิดพลาด',
+            text: err.error?.error || err.error?.message || 'ไม่สามารถปฏิเสธรายการได้',
+            icon: 'error',
+            confirmButtonText: 'ตกลง',
+            confirmButtonColor: '#00a3e0'
+          });
+        }
+      });
     });
   }
 }
