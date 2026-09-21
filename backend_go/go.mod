@@ -3,26 +3,25 @@ module intern-backend
 go 1.26.4
 
 require (
+	github.com/MicahParks/keyfunc/v2 v2.1.0
 	github.com/gin-gonic/gin v1.12.0
-	gorm.io/driver/postgres v1.6.2
+	github.com/golang-jwt/jwt/v5 v5.3.1
+	gorm.io/driver/postgres v1.6.3
 	gorm.io/gorm v1.31.2
 )
 
 require (
-	github.com/MicahParks/keyfunc/v2 v2.1.0 // indirect
 	github.com/bytedance/gopkg v0.1.4 // indirect
 	github.com/bytedance/sonic v1.15.3 // indirect
 	github.com/bytedance/sonic/loader v0.5.2 // indirect
 	github.com/cloudwego/base64x v0.1.7 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.15 // indirect
-	github.com/gin-contrib/cors v1.7.7 // indirect
 	github.com/gin-contrib/sse v1.1.1 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.30.3 // indirect
 	github.com/goccy/go-json v0.10.6 // indirect
 	github.com/goccy/go-yaml v1.19.2 // indirect
-	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/pgx/v5 v5.10.0 // indirect

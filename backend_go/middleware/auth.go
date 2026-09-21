@@ -13,7 +13,7 @@ import (
 
 type CustomClaims struct {
 	Email       string   `json:"email"`
-	Auth0Email  string   `json:"https://example.com/email"` // เผื่อ Custom Namespace ของ Auth0
+	Auth0Email  string   `json:"https://example.com/email"`
 	Permissions []string `json:"permissions"`
 	jwt.RegisteredClaims
 }
@@ -21,7 +21,6 @@ type CustomClaims struct {
 var jwks *keyfunc.JWKS
 
 func InitJWKS(auth0Domain string) {
-	// ตัด https:// ออกหากผู้ใช้ใส่มา เพื่อป้องกัน URL ซ้ำซ้อน
 	domain := strings.TrimPrefix(auth0Domain, "https://")
 	domain = strings.TrimPrefix(domain, "http://")
 
@@ -40,7 +39,6 @@ func InitJWKS(auth0Domain string) {
 }
 
 func ValidateJWT(auth0Domain string, apiAudience string) gin.HandlerFunc {
-	// จัดฟอร์แมต Domain และ Expected Issuer ให้ถูกต้อง
 	domain := strings.TrimPrefix(auth0Domain, "https://")
 	domain = strings.TrimPrefix(domain, "http://")
 	expectedIssuer := fmt.Sprintf("https://%s/", domain)
@@ -56,30 +54,27 @@ func ValidateJWT(auth0Domain string, apiAudience string) gin.HandlerFunc {
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 		claims := &CustomClaims{}
 
-		var token *jwt.Token
-		var err error
-
-		// ตั้งค่า Options ในการตรวจเช็ก Issuer และ Audience
 		parseOptions := []jwt.ParserOption{
 			jwt.WithIssuer(expectedIssuer),
 			jwt.WithAudience(apiAudience),
 		}
 
+		var token *jwt.Token
+		var err error
+
 		if jwks != nil {
 			token, err = jwt.ParseWithClaims(tokenString, claims, jwks.Keyfunc, parseOptions...)
 		} else {
-			// Fallback กรณีที่ JWKS ดึงไม่ผ่าน
 			token, _, err = jwt.NewParser(parseOptions...).ParseUnverified(tokenString, claims)
 		}
 
 		if err != nil || !token.Valid {
-			fmt.Printf("⚠️ JWT Validation Error: %v\n", err) // Print ดู error จริงใน Terminal
+			fmt.Printf("⚠️ JWT Validation Error: %v\n", err)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: Invalid or expired token"})
 			c.Abort()
 			return
 		}
 
-		// ดึง Email จาก Claim ใน Token ถ้าไม่มีให้เช็กจาก Header X-User-Email
 		userEmail := claims.Email
 		if userEmail == "" {
 			userEmail = claims.Auth0Email
@@ -118,14 +113,10 @@ func RequirePermission(requiredPermission string) gin.HandlerFunc {
 			return
 		}
 
-		// ----------------------------------------------------
-		// 1. Email-Based Fallback (สำหรับกรณีที่ Auth0 ไม่ได้เปิด RBAC / Permissions)
-		// ----------------------------------------------------
 		userEmail, _ := c.Get("user_email")
 		emailStr, _ := userEmail.(string)
 		emailStr = strings.ToLower(emailStr)
 
-		// ให้สิทธิ์ Approver อัตโนมัติหากเป็นบัญชี approver
 		if strings.Contains(emailStr, "approver") {
 			if requiredPermission == "read:pending_requests" ||
 				requiredPermission == "approve:requests" ||
@@ -135,7 +126,6 @@ func RequirePermission(requiredPermission string) gin.HandlerFunc {
 			}
 		}
 
-		// ให้สิทธิ์ Admin อัตโนมัติหากเป็นบัญชี admin
 		if strings.Contains(emailStr, "admin") {
 			if requiredPermission == "read:audit_logs" ||
 				requiredPermission == "read:all_requests" ||
@@ -147,9 +137,6 @@ func RequirePermission(requiredPermission string) gin.HandlerFunc {
 			}
 		}
 
-		// ----------------------------------------------------
-		// 2. JWT Claim Permissions Check (สำหรับกรณีที่มี RBAC ใน Token)
-		// ----------------------------------------------------
 		hasPermission := false
 		for _, p := range claims.Permissions {
 			if p == requiredPermission {
@@ -163,9 +150,6 @@ func RequirePermission(requiredPermission string) gin.HandlerFunc {
 			return
 		}
 
-		// ----------------------------------------------------
-		// 3. ป้องกันการเข้าถึงหากไม่ผ่านเงื่อนไขใดๆ ข้างต้น
-		// ----------------------------------------------------
 		c.JSON(http.StatusForbidden, gin.H{
 			"error": "Forbidden: You do not have permission to perform this action",
 		})
