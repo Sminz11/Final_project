@@ -8,18 +8,20 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes),
-    provideHttpClient(withInterceptors([authHttpInterceptorFn])),
+    provideHttpClient(
+      withInterceptors([authHttpInterceptorFn])
+    ),
     provideAuth0({
-      domain: 'dev-ludpyfaeksp25aae.us.auth0.com',
-      clientId: 'eBucgTOLbomTJuiIjXJNHqP8kk24N0XC',
+      domain: 'dev-if4shgdd8fo8fttw.us.auth0.com',
+      clientId: 'tXw5allsx5GdR2FKyipCsPnbiiKBt4wI',
       authorizationParams: {
         redirect_uri: window.location.origin,
-        audience: 'https://intern-request-api'
+        audience: 'https://intern-request-api',
+        scope: 'openid profile email offline_access'
       },
       httpInterceptor: {
         allowedList: [
           {
-            // ใช้ Wildcard ครอบคลุมทุก Endpoint ใต้ /api/v1/
             uri: 'http://localhost:8080/api/v1/*',
             tokenOptions: {
               authorizationParams: {

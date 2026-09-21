@@ -1,10 +1,10 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { AuthService } from '@auth0/auth0-angular';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import Swal from 'sweetalert2';
-import { filter } from 'rxjs/operators';
 import { RequestService, RequestItem } from '../services/request.service';
 
 @Component({
@@ -15,14 +15,19 @@ import { RequestService, RequestItem } from '../services/request.service';
   styleUrls: ['./dashboard.component.css']
 })
 export class DashboardComponent implements OnInit {
+  private destroyRef = inject(DestroyRef);
+
   myRequests: RequestItem[] = [];
   filteredRequests: RequestItem[] = [];
   searchTerm: string = '';
   selectedStatus: string = 'ALL';
   loadingRequests: boolean = false;
-  apiMessage: string = 'กำลังเชื่อมต่อ API...';
 
-  // --- Pagination Variables ---
+  // Modal Detail State
+  selectedDetail: RequestItem | null = null;
+  showDetailModal: boolean = false;
+
+  // Pagination
   currentPage: number = 1;
   pageSize: number = 5;
   Math = Math;
@@ -33,12 +38,13 @@ export class DashboardComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    this.auth.isAuthenticated$.pipe(
-      filter((isAuth: boolean) => isAuth === true)
-    ).subscribe(() => {
-      this.loadMyRequests();
-      this.checkApiStatus();
-    });
+    this.auth.isAuthenticated$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((isAuthenticated: boolean) => {
+        if (isAuthenticated) {
+          this.loadMyRequests();
+        }
+      });
   }
 
   login(): void {
@@ -47,48 +53,41 @@ export class DashboardComponent implements OnInit {
 
   loadMyRequests(): void {
     this.loadingRequests = true;
-    
-    this.requestService.getMyRequests().subscribe({
-      next: (data: RequestItem[]) => {
-        this.myRequests = (data || []).map((item: RequestItem) => ({
-          ...item,
-          req_code: item.req_code || (item as any).reqCode || String(item.id),
-          title: item.title,
-          request_type: item.request_type || (item as any).requestType,
-          target_system: item.target_system || (item as any).targetSystem,
-          status: item.status || 'DRAFT'
-        }));
 
-        this.applyFilter();
-        this.loadingRequests = false;
-      },
-      error: (err: any) => {
-        console.error('Fetch requests error:', err);
-        this.loadingRequests = false;
-      }
-    });
-  }
+    this.requestService.getMyRequests()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (data: RequestItem[]) => {
+          this.myRequests = (data || []).map((item: RequestItem) => {
+            const raw = item as Record<string, any>;
+            return {
+              ...item,
+              req_code: item.req_code || raw['reqCode'] || String(item.id),
+              request_type: item.request_type || raw['requestType'],
+              target_system: item.target_system || raw['targetSystem'],
+              status: item.status || 'DRAFT'
+            };
+          });
 
-  checkApiStatus(): void {
-    this.requestService.getProtected().subscribe({
-      next: (res: any) => {
-        this.apiMessage = JSON.stringify(res, null, 2);
-      },
-      error: (err: any) => {
-        this.apiMessage = JSON.stringify(err.error || { message: 'API Connection Failed' }, null, 2);
-      }
-    });
+          this.applyFilter();
+          this.loadingRequests = false;
+        },
+        error: (err: unknown) => {
+          console.error('Fetch requests error:', err);
+          this.loadingRequests = false;
+        }
+      });
   }
 
   applyFilter(): void {
     const term = (this.searchTerm || '').trim().toLowerCase();
-    
+
     this.filteredRequests = this.myRequests.filter((req: RequestItem) => {
-      const matchSearch = !term || 
+      const matchSearch = !term ||
         (req.req_code && String(req.req_code).toLowerCase().includes(term)) ||
         (req.title && String(req.title).toLowerCase().includes(term)) ||
         (req.target_system && String(req.target_system).toLowerCase().includes(term));
-      
+
       const matchStatus = this.selectedStatus === 'ALL' || req.status === this.selectedStatus;
 
       return matchSearch && matchStatus;
@@ -97,7 +96,16 @@ export class DashboardComponent implements OnInit {
     this.currentPage = 1;
   }
 
-  // --- Pagination Logic ---
+  openDetailModal(item: RequestItem): void {
+    this.selectedDetail = item;
+    this.showDetailModal = true;
+  }
+
+  closeDetailModal(): void {
+    this.showDetailModal = false;
+    this.selectedDetail = null;
+  }
+
   get pagedRequests(): RequestItem[] {
     const startIndex = (this.currentPage - 1) * this.pageSize;
     return this.filteredRequests.slice(startIndex, startIndex + this.pageSize);
@@ -113,7 +121,7 @@ export class DashboardComponent implements OnInit {
     }
   }
 
-  getStatusStyle(status: string) {
+  getStatusStyle(status: string): { [key: string]: string } {
     switch (status) {
       case 'DRAFT': return { 'background-color': '#f1f5f9', 'color': '#475569' };
       case 'SUBMITTED': return { 'background-color': '#e0f2fe', 'color': '#0288d1' };
@@ -134,7 +142,7 @@ export class DashboardComponent implements OnInit {
       confirmButtonText: 'ใช่, ส่งคำขอเลย!',
       cancelButtonText: 'ยกเลิก',
       customClass: { popup: 'swal-ktb-popup' }
-    }).then((result: any) => {
+    }).then((result) => {
       if (result.isConfirmed) {
         this.executeSubmit(requestId);
       }

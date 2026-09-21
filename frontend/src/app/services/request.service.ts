@@ -21,6 +21,7 @@ export interface RequestItem {
 export interface AuditLog {
   id: number;
   actor_sub: string;
+  actor_email?: string;
   action: string;
   target_request_id: number;
   details: string;
@@ -55,6 +56,10 @@ export class RequestService {
 
   getMyRequests(): Observable<RequestItem[]> {
     return this.http.get<RequestItem[]>(`${this.apiUrl}/requests`);
+  }
+
+  getRequestById(id: number): Observable<RequestItem> {
+    return this.http.get<RequestItem>(`${this.apiUrl}/requests/${id}`);
   }
 
   // 2. REQUEST_APPROVER

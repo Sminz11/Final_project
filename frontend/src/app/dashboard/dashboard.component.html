@@ -1,91 +1,14 @@
-<!-- ================= 1. LANDING PAGE (ยังไม่ได้เข้าสู่ระบบ) ================= -->
-<ng-container *ngIf="!(auth.isAuthenticated$ | async)">
-  <div class="ktb-hero-container">
-    <div class="ktb-hero-content">
-      
-      <div class="hero-badge">
-        <span class="badge-dot"></span>
-        PORTALHUB × AUTH0 OIDC
-      </div>
-
-      <h1 class="hero-title">
-        เข้าถึงระบบปลอดภัย <br />
-        <span class="highlight-blue">ง่ายดายในคลิกเดียว</span>
-      </h1>
-
-      <p class="hero-description">
-        ระบบจัดการและขออนุมัติสิทธิ์การเข้าใช้งานระบบสารสนเทศ (Access Request Portal) <br />
-        เชื่อมต่อด้วย Auth0 OIDC และ Go High-Performance API ที่มีความปลอดภัยสูง
-      </p>
-
-      <div class="hero-action">
-        <button class="btn-ktb-primary" (click)="login()">
-          <span>เข้าสู่ระบบด้วย Auth0</span>
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
-            <path fill-rule="evenodd" d="M1 8a.5.5 0 0 1 .5-.5h11.793l-3.147-3.146a.5.5 0 0 1 .708-.708l4 4a.5.5 0 0 1 0 .708l-4 4a.5.5 0 0 1-.708-.708L13.293 8.5H1.5A.5.5 0 0 1 1 8z"/>
-          </svg>
-        </button>
-      </div>
-
-      <div class="hero-features">
-        <div class="feature-item">
-          <div class="feature-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
-              <path d="M8 0c-.15 0-.302.022-.442.067L2.83 1.838A1.5 1.5 0 0 0 1.5 3.253v4.693c0 3.88 2.213 7.21 5.5 8.914a1.5 1.5 0 0 0 1.999 0c3.288-1.704 5.501-5.034 5.501-8.914V3.253a1.5 1.5 0 0 0-1.33-1.415L8.442.067A1.5 1.5 0 0 0 8 0zm3.354 5.854l-4 4a.5.5 0 0 1-.708 0l-2-2a.5.5 0 1 1 .708-.708L7 8.793l3.646-3.647a.5.5 0 0 1 .708.708z"/>
-            </svg>
-          </div>
-          <div class="feature-text">
-            <strong>ระบบความปลอดภัยสูง</strong>
-            <span>ยิง API ผ่าน Bearer Token</span>
-          </div>
-        </div>
-
-        <div class="feature-item">
-          <div class="feature-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
-              <path d="M11.251.068a.5.5 0 0 1 .227.58L9.677 6.5H13a.5.5 0 0 1 .364.843l-8 8.5a.5.5 0 0 1-.842-.49L6.323 9.5H3a.5.5 0 0 1-.364-.843l8-8.5a.5.5 0 0 1 .615-.09z"/>
-            </svg>
-          </div>
-          <div class="feature-text">
-            <strong>อนุมัติรวดเร็ว</strong>
-            <span>ติดตามสถานะ Request Real-time</span>
-          </div>
-        </div>
-
-        <div class="feature-item">
-          <div class="feature-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
-              <path d="M4 0h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2zm0 1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H4z"/>
-              <path d="M8 5a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm-2 3a2 2 0 1 1 4 0v1H6V8zm1-3a2 2 0 1 1 2 0 2 2 0 0 1-2 0z"/>
-            </svg>
-          </div>
-          <div class="feature-text">
-            <strong>Audit Log ครบถ้วน</strong>
-            <span>ตรวจสอบประวัติย้อนหลังได้ทันที</span>
-          </div>
-        </div>
-      </div>
-
-    </div>
-  </div>
-</ng-container>
-
-<!-- ================= 2. DASHBOARD PAGE (เข้าสู่ระบบแล้ว) ================= -->
-<ng-container *ngIf="auth.isAuthenticated$ | async">
+<ng-container *ngIf="auth.isAuthenticated$ | async; else landingPage">
   <div class="dashboard-container">
     <div class="dashboard-content">
-      
-      <!-- Header Section -->
+      <!-- Dashboard Header -->
       <div class="dash-header">
         <div>
-          <h2 class="dash-title">แผงควบคุมหลัก (Dashboard)</h2>
+          <h1 class="dash-title">แผงควบคุมหลัก (Dashboard)</h1>
           <p class="dash-subtitle">จัดการและติดตามสถานะคำขออนุมัติสิทธิ์เข้าใช้งานระบบของคุณ</p>
         </div>
         <a routerLink="/create-request" class="btn-create">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
-            <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
-          </svg>
-          <span>สร้างคำขอใหม่</span>
+          <i class="bi bi-plus-lg"></i> สร้างคำขอใหม่
         </a>
       </div>
 
@@ -93,49 +16,44 @@
       <div class="dash-card">
         <div class="card-head">
           <div class="card-title-group">
-            <div class="card-icon">
-              <!-- Shield SVG Icon -->
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
-                <path d="M8 0c-.15 0-.302.022-.442.067L2.83 1.838A1.5 1.5 0 0 0 1.5 3.253v4.693c0 3.88 2.213 7.21 5.5 8.914a1.5 1.5 0 0 0 1.999 0c3.288-1.704 5.501-5.034 5.501-8.914V3.253a1.5 1.5 0 0 0-1.33-1.415L8.442.067A1.5 1.5 0 0 0 8 0zm3.354 5.854l-4 4a.5.5 0 0 1-.708 0l-2-2a.5.5 0 1 1 .708-.708L7 8.793l3.646-3.647a.5.5 0 0 1 .708.708z"/>
-              </svg>
-            </div>
+            <div class="card-icon"><i class="bi bi-shield-check"></i></div>
             <h3>รายการคำขอสิทธิ์ของฉัน (My Access Requests)</h3>
           </div>
-          <button class="btn-refresh" (click)="loadMyRequests()">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
-              <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
-              <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
-            </svg>
-            <span>รีเฟรชตาราง</span>
+          <button class="btn-refresh" (click)="loadMyRequests()" title="รีเฟรชข้อมูล">
+            <i class="bi bi-arrow-clockwise"></i> รีเฟรชตาราง
           </button>
         </div>
 
         <div class="card-body">
-          <!-- Filter Bar -->
+          <!-- Filter Controls -->
           <div class="filter-grid">
             <div class="search-box">
-              <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
-              </svg>
+              <i class="bi bi-search search-icon"></i>
               <input 
                 type="text" 
                 class="input-search" 
-                placeholder="ค้นหารหัสคำขอ, หัวข้อ, ระบบ..." 
+                placeholder="ค้นหารหัสคำขอ, หัวข้อ, ระบบ..."
                 [(ngModel)]="searchTerm" 
                 (ngModelChange)="applyFilter()"
               />
             </div>
-            <select class="select-status" [(ngModel)]="selectedStatus" (ngModelChange)="applyFilter()">
+            <select class="select-status" [(ngModel)]="selectedStatus" (change)="applyFilter()">
               <option value="ALL">สถานะทั้งหมด</option>
-              <option value="DRAFT">DRAFT</option>
-              <option value="SUBMITTED">SUBMITTED</option>
-              <option value="APPROVED">APPROVED</option>
-              <option value="REJECTED">REJECTED</option>
+              <option value="DRAFT">ร่าง (DRAFT)</option>
+              <option value="SUBMITTED">รออนุมัติ (SUBMITTED)</option>
+              <option value="APPROVED">อนุมัติแล้ว (APPROVED)</option>
+              <option value="REJECTED">ปฏิเสธ (REJECTED)</option>
             </select>
           </div>
 
-          <!-- Table Wrapper -->
-          <div class="table-container">
+          <!-- Loading State -->
+          <div *ngIf="loadingRequests" class="loading-state">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2">กำลังโหลดข้อมูลคำขอ...</p>
+          </div>
+
+          <!-- Table Content -->
+          <div class="table-container" *ngIf="!loadingRequests">
             <table class="custom-table">
               <thead>
                 <tr>
@@ -151,22 +69,25 @@
                 <tr *ngFor="let req of pagedRequests">
                   <td class="req-code">{{ req.req_code }}</td>
                   <td class="req-title">{{ req.title }}</td>
-                  
-                  <!-- ปรับผูก [ngClass] แยกสี Badge ตาม request_type -->
                   <td>
-                    <span class="type-badge" 
-                          [ngClass]="{
-                            'type-db': req.request_type === 'DATABASE',
-                            'type-server': req.request_type === 'SERVER',
-                            'type-app': req.request_type === 'APPLICATION'
-                          }">
-                      {{ req.request_type || 'DATABASE' }}
+                    <span 
+                      class="type-badge"
+                      [ngClass]="{
+                        'type-db': req.request_type === 'DATABASE',
+                        'type-server': req.request_type === 'SERVER',
+                        'type-app': req.request_type === 'APPLICATION'
+                      }"
+                    >
+                      {{ req.request_type }}
                     </span>
                   </td>
-
                   <td class="target-sys">{{ req.target_system }}</td>
                   <td class="text-center">
-                    <span class="status-pill" [ngStyle]="getStatusStyle(req.status)">
+                    <span 
+                      class="status-pill" 
+                      [ngStyle]="getStatusStyle(req.status)"
+                      [attr.title]="req.status === 'REJECTED' && req.reject_reason ? 'เหตุผล: ' + req.reject_reason : null"
+                    >
                       {{ req.status }}
                     </span>
                   </td>
@@ -178,50 +99,47 @@
                     >
                       ส่งคำขอ
                     </button>
-                    <span *ngIf="req.status !== 'DRAFT'" class="text-muted">-</span>
+                    <button 
+                      *ngIf="req.status !== 'DRAFT'" 
+                      class="btn-view"
+                      (click)="openDetailModal(req)"
+                    >
+                      รายละเอียด
+                    </button>
                   </td>
                 </tr>
 
-                <!-- Empty State -->
-                <tr *ngIf="filteredRequests.length === 0 && !loadingRequests">
+                <tr *ngIf="filteredRequests.length === 0">
                   <td colspan="6" class="empty-state">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="currentColor" viewBox="0 0 16 16" style="margin-bottom: 8px;">
-                      <path d="M4.98 4a.5.5 0 0 0-.39.188L1.54 8H6a.5.5 0 0 1 .5.5 1.5 1.5 0 0 1 3 0A.5.5 0 0 1 10 8h4.46l-3.05-3.812A.5.5 0 0 0 11.02 4H4.98zm9.954 5H10.45a2.5 2.5 0 0 1-4.9 0H1.066l.32 2.562a.5.5 0 0 0 .497.438h12.234a.5.5 0 0 0 .496-.438L14.934 9z"/>
-                    </svg>
-                    <p>ไม่พบรายการคำขอสิทธิ์ที่ตรงกับเงื่อนไข</p>
-                  </td>
-                </tr>
-
-                <!-- Loading State -->
-                <tr *ngIf="loadingRequests">
-                  <td colspan="6" class="loading-state">
-                    <span>กำลังโหลดข้อมูลคำขอ...</span>
+                    <i class="bi bi-inbox"></i>
+                    <p>ไม่พบรายการคำขอสิทธิ์</p>
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
 
-          <!-- Pagination Footer Section -->
-          <div class="pagination-footer" *ngIf="filteredRequests.length > 0">
+          <!-- Pagination Footer -->
+          <div class="pagination-footer" *ngIf="!loadingRequests && filteredRequests.length > 0">
             <div class="pagination-info">
-              แสดง {{ (currentPage - 1) * pageSize + 1 }} ถึง {{ Math.min(currentPage * pageSize, filteredRequests.length) }} จากทั้งหมด {{ filteredRequests.length }} รายการ
+              แสดง {{ (currentPage - 1) * pageSize + 1 }} ถึง 
+              {{ Math.min(currentPage * pageSize, filteredRequests.length) }} 
+              จากทั้งหมด {{ filteredRequests.length }} รายการ
             </div>
-
             <div class="pagination-buttons">
               <button 
                 class="btn-pagination" 
                 [disabled]="currentPage === 1" 
-                (click)="goToPage(currentPage - 1)">
+                (click)="goToPage(currentPage - 1)"
+              >
                 ก่อนหน้า
               </button>
-              
               <span class="page-indicator">หน้า {{ currentPage }} / {{ totalPages }}</span>
-
               <button 
                 class="btn-pagination" 
                 [disabled]="currentPage === totalPages" 
-                (click)="goToPage(currentPage + 1)">
+                (click)="goToPage(currentPage + 1)"
+              >
                 ถัดไป
               </button>
             </div>
@@ -229,25 +147,92 @@
 
         </div>
       </div>
+    </div>
+  </div>
 
-      <!-- API Status Card -->
-      <div class="dash-card">
-        <div class="card-head">
-          <div class="card-title-group">
-            <div class="card-icon dark-icon">
-              <!-- Terminal SVG Icon -->
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
-                <path d="M2 3a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1H2zm1 3h2a.5.5 0 0 1 0 1H3a.5.5 0 0 1 0-1zm0 2h4a.5.5 0 0 1 0 1H3a.5.5 0 0 1 0-1zm0 2h3a.5.5 0 0 1 0 1H3a.5.5 0 0 1 0-1z"/>
-              </svg>
-            </div>
-            <h3>สถานะการเชื่อมต่อ Backend API</h3>
+  <!-- Modal รายละเอียดคำขอ -->
+  <div class="modal-backdrop" *ngIf="showDetailModal" (click)="closeDetailModal()">
+    <div class="modal-card" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <h3>รายละเอียดคำขอ {{ selectedDetail?.req_code }}</h3>
+        <button class="btn-close" (click)="closeDetailModal()">&times;</button>
+      </div>
+      <div class="modal-body" *ngIf="selectedDetail">
+        <div class="detail-grid">
+          <div class="detail-item">
+            <label>หัวข้อคำขอ:</label>
+            <p>{{ selectedDetail.title }}</p>
+          </div>
+          <div class="detail-item">
+            <label>ประเภทสิทธิ์:</label>
+            <p>{{ selectedDetail.request_type }}</p>
+          </div>
+          <div class="detail-item">
+            <label>ระบบเป้าหมาย:</label>
+            <p>{{ selectedDetail.target_system }}</p>
+          </div>
+          <div class="detail-item">
+            <label>สถานะ:</label>
+            <p><span class="status-pill" [ngStyle]="getStatusStyle(selectedDetail.status)">{{ selectedDetail.status }}</span></p>
+          </div>
+          <div class="detail-item full-width">
+            <label>เหตุผลในการขอสิทธิ์:</label>
+            <p class="reason-box">{{ selectedDetail.reason || '-' }}</p>
+          </div>
+          <div class="detail-item full-width" *ngIf="selectedDetail.reject_reason">
+            <label class="text-danger">เหตุผลการปฏิเสธ:</label>
+            <p class="reason-box reject-box">{{ selectedDetail.reject_reason }}</p>
           </div>
         </div>
-        <div class="card-body">
-          <pre class="api-terminal"><code>{{ apiMessage }}</code></pre>
-        </div>
       </div>
-
     </div>
   </div>
 </ng-container>
+
+<!-- Landing Page (กรณีผู้ใช้ยังไม่ได้ Login) -->
+<ng-template #landingPage>
+  <div class="ktb-hero-container">
+    <div class="ktb-hero-content">
+      <div class="hero-badge">
+        <span class="badge-dot"></span>
+        ระบบจัดการสิทธิ์เข้าถึงระบบสารสนเทศ
+      </div>
+      <h1 class="hero-title">
+        ขอยืนยันสิทธิ์เข้าใช้งานระบบ<br />
+        <span class="highlight-blue">อย่างปลอดภัย สะดวก และรวดเร็ว</span>
+      </h1>
+      <p class="hero-description">
+        แพลตฟอร์มกลางสำหรับเจ้าหน้าที่ในการยื่นขออนุมัติสิทธิ์เข้าใช้งานระบบฐานข้อมูล เซิร์ฟเวอร์ 
+        และแอปพลิเคชันภายในองค์กร เพื่อยกระดับความปลอดภัยตามมาตรฐาน IT Governance
+      </p>
+      <div class="hero-action">
+        <button (click)="login()" class="btn-ktb-primary">
+          เข้าสู่ระบบด้วย Auth0 <i class="bi bi-arrow-right"></i>
+        </button>
+      </div>
+      <div class="hero-features">
+        <div class="feature-item">
+          <div class="feature-icon"><i class="bi bi-shield-lock"></i></div>
+          <div class="feature-text">
+            <strong>ความปลอดภัยสูง</strong>
+            <span>ยืนยันตัวตนผ่านระบบชั้นนำ</span>
+          </div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-icon"><i class="bi bi-speedometer2"></i></div>
+          <div class="feature-text">
+            <strong>อนุมัติรวดเร็ว</strong>
+            <span>ติดตามสถานะได้แบบ Real-time</span>
+          </div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-icon"><i class="bi bi-journal-text"></i></div>
+          <div class="feature-text">
+            <strong>ตรวจสอบได้</strong>
+            <span>มีระบบ บันทึก Audit Log ครบถ้วน</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</ng-template>
