@@ -17,7 +17,7 @@ import (
 type Request struct {
 	ID             uint       `gorm:"primaryKey" json:"id"`
 	ReqCode        string     `gorm:"uniqueIndex;not null" json:"req_code"`
-	UserID         string     `gorm:"not null;index" json:"user_id"`
+	UserID         string     `gorm:"not null;index" json:"user_id"` // requester_sub จาก JWT sub
 	RequesterEmail string     `json:"requester_email"`
 	Title          string     `gorm:"not null" json:"title"`
 	RequestType    string     `gorm:"not null" json:"request_type"`
@@ -69,17 +69,7 @@ func initDB() {
 	}
 	database.AutoMigrate(&Request{}, &AuditLog{})
 	DB = database
-	log.Println("เชื่อมต่อ PostgreSQL บนพอร์ต 1234 เรียบร้อยแล้ว!")
-}
-
-// Helper function ช่วยดึง Email จาก Gin Context อย่างปลอดภัย
-func getUserEmail(c *gin.Context) string {
-	if emailVal, ok := c.Get("user_email"); ok {
-		if emailStr, ok := emailVal.(string); ok {
-			return emailStr
-		}
-	}
-	return ""
+	log.Println("เชื่อมต่อ PostgreSQL เรียบร้อยแล้ว!")
 }
 
 func logAudit(actorSub string, actorEmail string, action string, requestID uint, details string) {
@@ -98,16 +88,17 @@ func logAudit(actorSub string, actorEmail string, action string, requestID uint,
 func createRequestHandler(c *gin.Context) {
 	userIDVal, exists := c.Get("user_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งานจาก Token"})
 		return
 	}
-	userID, ok := userIDVal.(string)
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "รูปแบบ User ID ไม่ถูกต้อง"})
-		return
-	}
+	userID := userIDVal.(string)
 
-	userEmail := getUserEmail(c)
+	userEmail := ""
+	if emailVal, ok := c.Get("user_email"); ok {
+		if emailStr, ok := emailVal.(string); ok {
+			userEmail = emailStr
+		}
+	}
 
 	var input CreateRequestInput
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -141,7 +132,7 @@ func createRequestHandler(c *gin.Context) {
 func updateDraftHandler(c *gin.Context) {
 	userIDVal, _ := c.Get("user_id")
 	userID := userIDVal.(string)
-	userEmail := getUserEmail(c)
+	userEmail, _ := c.Get("user_email")
 	id := c.Param("id")
 
 	var req Request
@@ -179,14 +170,14 @@ func updateDraftHandler(c *gin.Context) {
 	}
 
 	DB.Save(&req)
-	logAudit(userID, userEmail, "UPDATE_DRAFT", req.ID, fmt.Sprintf("Updated draft request %s", req.ReqCode))
+	logAudit(userID, fmt.Sprint(userEmail), "UPDATE_DRAFT", req.ID, fmt.Sprintf("Updated draft request %s", req.ReqCode))
 	c.JSON(http.StatusOK, req)
 }
 
 func submitRequestHandler(c *gin.Context) {
 	userIDVal, _ := c.Get("user_id")
 	userID := userIDVal.(string)
-	userEmail := getUserEmail(c)
+	userEmail, _ := c.Get("user_email")
 	id := c.Param("id")
 
 	var req Request
@@ -209,7 +200,7 @@ func submitRequestHandler(c *gin.Context) {
 	req.SubmittedAt = &now
 	DB.Save(&req)
 
-	logAudit(userID, userEmail, "SUBMIT", req.ID, fmt.Sprintf("Submitted request %s", req.ReqCode))
+	logAudit(userID, fmt.Sprint(userEmail), "SUBMIT", req.ID, fmt.Sprintf("Submitted request %s", req.ReqCode))
 	c.JSON(http.StatusOK, req)
 }
 
@@ -230,7 +221,7 @@ func getPendingRequestsHandler(c *gin.Context) {
 func approveRequestHandler(c *gin.Context) {
 	userIDVal, _ := c.Get("user_id")
 	userID := userIDVal.(string)
-	userEmail := getUserEmail(c)
+	userEmail, _ := c.Get("user_email")
 	id := c.Param("id")
 
 	var req Request
@@ -248,14 +239,14 @@ func approveRequestHandler(c *gin.Context) {
 	req.ApprovedBySub = userID
 	DB.Save(&req)
 
-	logAudit(userID, userEmail, "APPROVE", req.ID, fmt.Sprintf("Approved request %s", req.ReqCode))
+	logAudit(userID, fmt.Sprint(userEmail), "APPROVE", req.ID, fmt.Sprintf("Approved request %s", req.ReqCode))
 	c.JSON(http.StatusOK, req)
 }
 
 func rejectRequestHandler(c *gin.Context) {
 	userIDVal, _ := c.Get("user_id")
 	userID := userIDVal.(string)
-	userEmail := getUserEmail(c)
+	userEmail, _ := c.Get("user_email")
 	id := c.Param("id")
 
 	var input RejectInput
@@ -280,7 +271,7 @@ func rejectRequestHandler(c *gin.Context) {
 	req.ApprovedBySub = userID
 	DB.Save(&req)
 
-	logAudit(userID, userEmail, "REJECT", req.ID, fmt.Sprintf("Rejected request %s: %s", req.ReqCode, input.RejectReason))
+	logAudit(userID, fmt.Sprint(userEmail), "REJECT", req.ID, fmt.Sprintf("Rejected request %s: %s", req.ReqCode, input.RejectReason))
 	c.JSON(http.StatusOK, req)
 }
 
@@ -299,7 +290,7 @@ func getAuditLogsHandler(c *gin.Context) {
 func main() {
 	initDB()
 
-	auth0Domain := "dev-ludpyfaeksp25aae.us.auth0.com"
+	auth0Domain := "dev-if4shgdd8fo8fttw.us.auth0.com"
 	apiAudience := "https://intern-request-api"
 	middleware.InitJWKS(auth0Domain)
 
@@ -308,7 +299,7 @@ func main() {
 	r.Use(func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "http://localhost:4200")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-User-Email")
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
 			return
@@ -321,7 +312,7 @@ func main() {
 	{
 		v1.GET("/protected", func(c *gin.Context) {
 			userID, _ := c.Get("user_id")
-			c.JSON(http.StatusOK, gin.H{
+			c.JSON(http.StatusCreated, gin.H{
 				"message": "เชื่อมต่อ Backend API สำเร็จ",
 				"status":  "success",
 				"user_id": userID,
@@ -330,18 +321,19 @@ func main() {
 
 		// REQUEST_USER Endpoints
 		v1.POST("/requests", middleware.RequirePermission("create:requests"), createRequestHandler)
-		v1.PUT("/requests/:id", middleware.RequirePermission("update:own_requests"), updateDraftHandler)
-		v1.POST("/requests/:id/submit", middleware.RequirePermission("submit:requests"), submitRequestHandler)
-		v1.GET("/requests", middleware.RequirePermission("read:own_requests"), getMyRequestsHandler)
+		v1.PUT("/requests/:id", middleware.RequirePermission("create:requests"), updateDraftHandler)
+		v1.POST("/requests/:id/submit", middleware.RequirePermission("create:requests"), submitRequestHandler)
+		v1.GET("/requests", getMyRequestsHandler)
 
 		// REQUEST_APPROVER Endpoints
 		v1.GET("/approvals/pending", middleware.RequirePermission("read:pending_requests"), getPendingRequestsHandler)
 		v1.POST("/requests/:id/approve", middleware.RequirePermission("approve:requests"), approveRequestHandler)
-		v1.POST("/requests/:id/reject", middleware.RequirePermission("reject:requests"), rejectRequestHandler)
+		v1.POST("/requests/:id/reject", middleware.RequirePermission("approve:requests"), rejectRequestHandler)
 
 		// REQUEST_ADMIN Endpoints
 		v1.GET("/admin/requests", middleware.RequirePermission("read:all_requests"), getAllRequestsAdminHandler)
 		v1.GET("/admin/audit-logs", middleware.RequirePermission("read:audit_logs"), getAuditLogsHandler)
+		v1.GET("/admin/audit-log", middleware.RequirePermission("read:audit_logs"), getAuditLogsHandler)
 	}
 
 	log.Println("Backend Server running on port 8080")

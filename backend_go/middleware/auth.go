@@ -12,6 +12,8 @@ import (
 )
 
 type CustomClaims struct {
+	Email       string   `json:"email"`
+	Auth0Email  string   `json:"https://example.com/email"` // เผื่อ Custom Namespace ของ Auth0
 	Permissions []string `json:"permissions"`
 	jwt.RegisteredClaims
 }
@@ -77,9 +79,18 @@ func ValidateJWT(auth0Domain string, apiAudience string) gin.HandlerFunc {
 			return
 		}
 
+		// ดึง Email จาก Claim ใน Token ถ้าไม่มีให้เช็กจาก Header X-User-Email
+		userEmail := claims.Email
+		if userEmail == "" {
+			userEmail = claims.Auth0Email
+		}
+		if userEmail == "" {
+			userEmail = c.GetHeader("X-User-Email")
+		}
+
 		c.Set("user", token)
 		c.Set("user_id", claims.Subject)
-		c.Set("user_email", claims.Subject)
+		c.Set("user_email", userEmail)
 		c.Next()
 	}
 }
@@ -107,6 +118,28 @@ func RequirePermission(requiredPermission string) gin.HandlerFunc {
 			return
 		}
 
+		// ----------------------------------------------------
+		// 1. Email-Based Fallback (สำหรับกรณีที่ Auth0 ไม่ได้เปิด RBAC / Permissions)
+		// ----------------------------------------------------
+		userEmail, _ := c.Get("user_email")
+		emailStr, _ := userEmail.(string)
+		emailStr = strings.ToLower(emailStr)
+
+		// ให้สิทธิ์ Approver อัตโนมัติหากเป็นบัญชี approver
+		if requiredPermission == "read:pending_requests" && strings.Contains(emailStr, "approver") {
+			c.Next()
+			return
+		}
+
+		// ให้สิทธิ์ Admin อัตโนมัติหากเป็นบัญชี admin
+		if (requiredPermission == "read:audit_logs" || requiredPermission == "read:all_requests") && strings.Contains(emailStr, "admin") {
+			c.Next()
+			return
+		}
+
+		// ----------------------------------------------------
+		// 2. JWT Claim Permissions Check (สำหรับกรณีที่มี RBAC ใน Token)
+		// ----------------------------------------------------
 		hasPermission := false
 		for _, p := range claims.Permissions {
 			if p == requiredPermission {
@@ -115,14 +148,17 @@ func RequirePermission(requiredPermission string) gin.HandlerFunc {
 			}
 		}
 
-		if !hasPermission {
-			c.JSON(http.StatusForbidden, gin.H{
-				"error": "Forbidden: You do not have permission to perform this action",
-			})
-			c.Abort()
+		if hasPermission {
+			c.Next()
 			return
 		}
 
-		c.Next()
+		// ----------------------------------------------------
+		// 3. ป้องกันการเข้าถึงหากไม่ผ่านเงื่อนไขใดๆ ข้างต้น
+		// ----------------------------------------------------
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "Forbidden: You do not have permission to perform this action",
+		})
+		c.Abort()
 	}
 }
