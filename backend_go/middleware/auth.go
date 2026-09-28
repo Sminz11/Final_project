@@ -86,11 +86,13 @@ func ValidateJWT(auth0Domain string, apiAudience string) gin.HandlerFunc {
 		c.Set("user", token)
 		c.Set("user_id", claims.Subject)
 		c.Set("user_email", userEmail)
+		c.Set("permissions", claims.Permissions)
+
 		c.Next()
 	}
 }
 
-func RequirePermission(requiredPermission string) gin.HandlerFunc {
+func RequirePermission(allowedPermissions ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userToken, exists := c.Get("user")
 		if !exists {
@@ -113,41 +115,13 @@ func RequirePermission(requiredPermission string) gin.HandlerFunc {
 			return
 		}
 
-		userEmail, _ := c.Get("user_email")
-		emailStr, _ := userEmail.(string)
-		emailStr = strings.ToLower(emailStr)
-
-		if strings.Contains(emailStr, "approver") {
-			if requiredPermission == "read:pending_requests" ||
-				requiredPermission == "approve:requests" ||
-				requiredPermission == "reject:requests" {
-				c.Next()
-				return
+		for _, userPerm := range claims.Permissions {
+			for _, allowedPerm := range allowedPermissions {
+				if userPerm == allowedPerm {
+					c.Next()
+					return
+				}
 			}
-		}
-
-		if strings.Contains(emailStr, "admin") {
-			if requiredPermission == "read:audit_logs" ||
-				requiredPermission == "read:all_requests" ||
-				requiredPermission == "read:pending_requests" ||
-				requiredPermission == "approve:requests" ||
-				requiredPermission == "reject:requests" {
-				c.Next()
-				return
-			}
-		}
-
-		hasPermission := false
-		for _, p := range claims.Permissions {
-			if p == requiredPermission {
-				hasPermission = true
-				break
-			}
-		}
-
-		if hasPermission {
-			c.Next()
-			return
 		}
 
 		c.JSON(http.StatusForbidden, gin.H{

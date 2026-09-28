@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -17,7 +18,7 @@ import (
 type Request struct {
 	ID             uint       `gorm:"primaryKey" json:"id"`
 	ReqCode        string     `gorm:"uniqueIndex;not null" json:"req_code"`
-	UserID         string     `gorm:"not null;index" json:"user_id"` // requester_sub จาก JWT sub
+	UserID         string     `gorm:"not null;index" json:"user_id"`
 	RequesterEmail string     `json:"requester_email"`
 	Title          string     `gorm:"not null" json:"title"`
 	RequestType    string     `gorm:"not null" json:"request_type"`
@@ -61,8 +62,15 @@ type RejectInput struct {
 
 var DB *gorm.DB
 
+func getEnv(key, fallback string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
+	}
+	return fallback
+}
+
 func initDB() {
-	dsn := "host=localhost user=postgres password=1234 dbname=final_db port=1234 sslmode=disable TimeZone=Asia/Bangkok"
+	dsn := getEnv("DATABASE_URL", "host=localhost user=postgres password=1234 dbname=final_db port=1234 sslmode=disable TimeZone=Asia/Bangkok")
 	database, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("ไม่สามารถเชื่อมต่อ PostgreSQL ได้: %v", err)
@@ -72,7 +80,6 @@ func initDB() {
 	log.Println("เชื่อมต่อ PostgreSQL เรียบร้อยแล้ว!")
 }
 
-// Helper function สำหรับแมป Auth ID กับ Email จริง กรณีที่ Header หรือ Token ไม่ได้ส่ง Email มา
 func resolveEmailBySub(sub string) string {
 	if strings.Contains(sub, "6aabab3669a3f610cb") {
 		return "user02@test.com"
@@ -83,21 +90,19 @@ func resolveEmailBySub(sub string) string {
 	if strings.Contains(sub, "6a87d078ae1d2669812") {
 		return "approver01@test.com"
 	}
+	if strings.Contains(sub, "6a87d0b24e918518e80dc09a") {
+		return "admin01@test.com"
+	}
 	return ""
 }
 
-// Helper function ดึง Email จาก Context / Header / หรือ Map จาก User ID
 func getUserEmail(c *gin.Context) string {
 	if emailVal, ok := c.Get("user_email"); ok {
 		if emailStr, ok := emailVal.(string); ok && strings.TrimSpace(emailStr) != "" && strings.Contains(emailStr, "@") {
 			return emailStr
 		}
 	}
-	if headerEmail := c.GetHeader("X-User-Email"); strings.TrimSpace(headerEmail) != "" && strings.Contains(headerEmail, "@") {
-		return headerEmail
-	}
 
-	// Fallback: แมปจาก user_id (sub)
 	if userIDVal, ok := c.Get("user_id"); ok {
 		if userIDStr, ok := userIDVal.(string); ok {
 			if mappedEmail := resolveEmailBySub(userIDStr); mappedEmail != "" {
@@ -122,7 +127,28 @@ func logAudit(actorSub string, actorEmail string, action string, requestID uint,
 	})
 }
 
+// Check Role Helpers
+func isAdmin(c *gin.Context) bool {
+	return getUserEmail(c) == "admin01@test.com"
+}
+
+func isApprover(c *gin.Context) bool {
+	email := getUserEmail(c)
+	return email == "approver01@test.com" || email == "admin01@test.com"
+}
+
 // Handlers
+
+func getProfileHandler(c *gin.Context) {
+	userIDVal, _ := c.Get("user_id")
+	userID := userIDVal.(string)
+	userEmail := getUserEmail(c)
+
+	c.JSON(http.StatusOK, gin.H{
+		"user_id": userID,
+		"email":   userEmail,
+	})
+}
 
 func createRequestHandler(c *gin.Context) {
 	userIDVal, exists := c.Get("user_id")
@@ -162,10 +188,32 @@ func createRequestHandler(c *gin.Context) {
 	c.JSON(http.StatusCreated, newReq)
 }
 
+func getRequestByIDHandler(c *gin.Context) {
+	userIDVal, _ := c.Get("user_id")
+	userID := userIDVal.(string)
+	id := c.Param("id")
+
+	var req Request
+	if err := DB.First(&req, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบรายการคำขอ"})
+		return
+	}
+
+	if req.UserID != userID && !isApprover(c) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์เข้าถึงรายการคำขอนี้"})
+		return
+	}
+
+	if !strings.Contains(req.RequesterEmail, "@") {
+		req.RequesterEmail = resolveEmailBySub(req.UserID)
+	}
+
+	c.JSON(http.StatusOK, req)
+}
+
 func updateDraftHandler(c *gin.Context) {
 	userIDVal, _ := c.Get("user_id")
 	userID := userIDVal.(string)
-	userEmail := getUserEmail(c)
 	id := c.Param("id")
 
 	var req Request
@@ -202,6 +250,7 @@ func updateDraftHandler(c *gin.Context) {
 		req.Reason = input.Reason
 	}
 
+	userEmail := getUserEmail(c)
 	if userEmail != "" {
 		req.RequesterEmail = userEmail
 	}
@@ -260,10 +309,14 @@ func getMyRequestsHandler(c *gin.Context) {
 }
 
 func getPendingRequestsHandler(c *gin.Context) {
+	if !isApprover(c) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์เข้าถึงรายการรออนุมัติ"})
+		return
+	}
+
 	var requests []Request
 	DB.Where("status = ?", "SUBMITTED").Order("created_at desc").Find(&requests)
 
-	// แปลงค่า RequesterEmail ให้เป็นอีเมลจริงเสมอหากข้อมูลเดิมใน DB เก็บเป็น Auth ID
 	for i := range requests {
 		if !strings.Contains(requests[i].RequesterEmail, "@") {
 			requests[i].RequesterEmail = resolveEmailBySub(requests[i].UserID)
@@ -274,6 +327,11 @@ func getPendingRequestsHandler(c *gin.Context) {
 }
 
 func approveRequestHandler(c *gin.Context) {
+	if !isApprover(c) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์อนุมัติรายการคำขอ"})
+		return
+	}
+
 	userIDVal, _ := c.Get("user_id")
 	userID := userIDVal.(string)
 	userEmail := getUserEmail(c)
@@ -299,6 +357,11 @@ func approveRequestHandler(c *gin.Context) {
 }
 
 func rejectRequestHandler(c *gin.Context) {
+	if !isApprover(c) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์ปฏิเสธรายการคำขอ"})
+		return
+	}
+
 	userIDVal, _ := c.Get("user_id")
 	userID := userIDVal.(string)
 	userEmail := getUserEmail(c)
@@ -331,6 +394,11 @@ func rejectRequestHandler(c *gin.Context) {
 }
 
 func getAllRequestsAdminHandler(c *gin.Context) {
+	if !isAdmin(c) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์เข้าถึงข้อมูลผู้ดูแลระบบ"})
+		return
+	}
+
 	var requests []Request
 	DB.Order("created_at desc").Find(&requests)
 
@@ -344,6 +412,11 @@ func getAllRequestsAdminHandler(c *gin.Context) {
 }
 
 func getAuditLogsHandler(c *gin.Context) {
+	if !isAdmin(c) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์เข้าถึง Audit Logs"})
+		return
+	}
+
 	var logs []AuditLog
 	DB.Order("created_at desc").Find(&logs)
 
@@ -359,17 +432,21 @@ func getAuditLogsHandler(c *gin.Context) {
 func main() {
 	initDB()
 
-	auth0Domain := "dev-if4shgdd8fo8fttw.us.auth0.com"
-	apiAudience := "https://intern-request-api"
+	auth0Domain := getEnv("AUTH0_DOMAIN", "dev-if4shgdd8fo8fttw.us.auth0.com")
+	apiAudience := getEnv("AUTH0_AUDIENCE", "https://intern-request-api")
 
 	middleware.InitJWKS(auth0Domain)
 
 	r := gin.Default()
 
+	// CORS Middleware
 	r.Use(func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "http://localhost:4200")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-User-Email")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE, PATCH")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization, X-User-Email, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Expose-Headers", "Content-Length")
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
 			return
@@ -380,32 +457,28 @@ func main() {
 	v1 := r.Group("/api/v1")
 	v1.Use(middleware.ValidateJWT(auth0Domain, apiAudience))
 	{
-		v1.GET("/protected", func(c *gin.Context) {
-			userID, _ := c.Get("user_id")
-			c.JSON(http.StatusOK, gin.H{
-				"message": "เชื่อมต่อ Backend API สำเร็จ",
-				"status":  "success",
-				"user_id": userID,
-			})
-		})
+		// 1. Profile Endpoint
+		v1.GET("/profile", getProfileHandler)
 
-		// REQUEST_USER Endpoints
+		// 2. REQUEST_USER Endpoints
+		v1.GET("/requests", getMyRequestsHandler)
+		v1.GET("/requests/:id", getRequestByIDHandler)
 		v1.POST("/requests", createRequestHandler)
 		v1.PUT("/requests/:id", updateDraftHandler)
 		v1.POST("/requests/:id/submit", submitRequestHandler)
-		v1.GET("/requests", getMyRequestsHandler)
 
-		// REQUEST_APPROVER Endpoints
-		v1.GET("/approvals/pending", middleware.RequirePermission("read:pending_requests"), getPendingRequestsHandler)
-		v1.POST("/requests/:id/approve", middleware.RequirePermission("approve:requests"), approveRequestHandler)
-		v1.POST("/requests/:id/reject", middleware.RequirePermission("approve:requests"), rejectRequestHandler)
+		// 3. REQUEST_APPROVER Endpoints
+		v1.GET("/approvals/pending", getPendingRequestsHandler)
+		v1.POST("/requests/:id/approve", approveRequestHandler)
+		v1.POST("/requests/:id/reject", rejectRequestHandler)
 
-		// REQUEST_ADMIN Endpoints
-		v1.GET("/admin/requests", middleware.RequirePermission("read:all_requests"), getAllRequestsAdminHandler)
-		v1.GET("/admin/audit-logs", middleware.RequirePermission("read:audit_logs"), getAuditLogsHandler)
-		v1.GET("/admin/audit-log", middleware.RequirePermission("read:audit_logs"), getAuditLogsHandler)
+		// 4. REQUEST_ADMIN Endpoints
+		v1.GET("/admin/requests", getAllRequestsAdminHandler)
+		v1.GET("/admin/audit-logs", getAuditLogsHandler)
+		v1.GET("/admin/audit-log", getAuditLogsHandler)
 	}
 
-	log.Println("Backend Server running on port 8080")
-	r.Run(":8080")
+	port := getEnv("PORT", "8080")
+	log.Printf("Backend Server running on port %s\n", port)
+	r.Run(":" + port)
 }
