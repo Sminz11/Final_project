@@ -15,7 +15,7 @@
       <input 
         type="text" 
         class="filter-input" 
-        placeholder="ค้นหาด้วย Email, Auth ID, Details..." 
+        placeholder="ค้นหาด้วย Email, Details..." 
         [(ngModel)]="searchTerm" 
         (input)="applyFilter()"
       />
@@ -49,7 +49,6 @@
         <thead>
           <tr>
             <th style="width: 60px;">ID</th>
-            <th>Auth ID</th>
             <th>Email</th>
             <th>User</th>
             <th style="width: 150px;">Action</th>
@@ -61,7 +60,6 @@
           <!-- เพิ่ม (click) และ cursor-pointer บน tr เพื่อให้กดเปิด Modal ได้ -->
           <tr *ngFor="let log of pagedLogs" (click)="openDetailModal(log)" class="log-row">
             <td>{{ log.id }}</td>
-            <td><code class="user-id-code">{{ log.user_id }}</code></td>
             <td>{{ log.email }}</td>
             <td>{{ log.user }}</td>
             <td>
@@ -103,10 +101,6 @@
       </div>
 
       <div class="modal-body" *ngIf="selectedLog">
-        <div class="detail-item">
-          <span class="detail-label">Auth ID (Sub):</span>
-          <code class="user-id-code">{{ selectedLog.user_id }}</code>
-        </div>
         <div class="detail-item">
           <span class="detail-label">Email:</span>
           <span>{{ selectedLog.email }}</span>

@@ -123,7 +123,7 @@ export class AdminAuditLogComponent implements OnInit {
               timestamp: formattedTimestamp,
               details: log.details || '-'
             };
-          }).sort((a, b) => b.id - a.id); // เรียงรายการล่าสุดขึ้นก่อน (ID มากไปน้อย)
+          }).sort((a, b) => b.id - a.id); // หน้าเว็บแสดงรายการล่าสุดขึ้นก่อน (ID มากไปน้อย)
         } else {
           this.rawAuditLogs = [];
         }
@@ -208,30 +208,44 @@ export class AdminAuditLogComponent implements OnInit {
       return;
     }
 
-    const headers = ['ID', 'Auth ID', 'Email', 'User', 'Action', 'Timestamp', 'Details'];
-    const csvRows = [headers.join(',')];
+    // 1. เรียงลำดับข้อมูลตาม ID จากน้อยไปมาก (1 -> 22) สำหรับไฟล์ CSV
+    const sortedLogs = [...this.filteredLogs].sort((a, b) => a.id - b.id);
 
-    for (const log of this.filteredLogs) {
-      const row = [
-        log.id || '',
-        `"${log.user_id || ''}"`,
-        `"${log.email || ''}"`,
-        `"${log.user || ''}"`,
-        `"${log.action || ''}"`,
-        `"${log.timestamp || ''}"`,
-        `"${log.details || ''}"`
-      ];
-      csvRows.push(row.join(','));
-    }
+    // 2. กำหนด Header (ตัด Auth ID ออกเรียบร้อย)
+    const headers = ['ID', 'Email', 'User', 'Action', 'Timestamp', 'Details'];
 
-    const csvContent = csvRows.join('\n');
+    // 3. แปลงข้อมูลแต่ละรายการเป็น CSV Row
+    const csvRows = sortedLogs.map(log => {
+      const cleanDetails = `"${(log.details || '').replace(/"/g, '""')}"`;
+      const cleanEmail = `"${log.email || ''}"`;
+      const cleanUser = `"${log.user || ''}"`;
+      const cleanAction = `"${log.action || ''}"`;
+      const cleanTimestamp = `"${log.timestamp || ''}"`;
+
+      return [
+        log.id,
+        cleanEmail,
+        cleanUser,
+        cleanAction,
+        cleanTimestamp,
+        cleanDetails
+      ].join(',');
+    });
+
+    // 4. รวม Header และข้อมูล พร้อมใส่ UTF-8 BOM (\uFEFF) ให้อ่านภาษาไทยใน Excel ได้สมบูรณ์
+    const csvContent = '\uFEFF' + [headers.join(','), ...csvRows].join('\n');
+
+    // 5. ดาวน์โหลดไฟล์ CSV
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
     
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
+    const today = new Date().toISOString().split('T')[0];
+    link.setAttribute('href', url);
+    link.setAttribute('download', `audit_log_${today}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
     URL.revokeObjectURL(url);
   }
 }

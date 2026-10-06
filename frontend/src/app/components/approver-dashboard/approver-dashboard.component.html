@@ -41,7 +41,7 @@
             <input 
               type="text" 
               class="input-search" 
-              placeholder="ค้นหารหัสคำขอ, Auth ID, EMAIL, หัวข้อ, ระบบ..."
+              placeholder="ค้นหารหัสคำขอ, EMAIL, หัวข้อ, ระบบ..."
               [(ngModel)]="searchTerm"
               (input)="applyFilter()">
           </div>
@@ -61,7 +61,6 @@
             <thead>
               <tr>
                 <th>รหัสคำขอ</th>
-                <th>AUTH ID</th>
                 <th>EMAIL</th>
                 <th>หัวข้อคำขอ</th>
                 <th>ประเภท</th>
@@ -73,9 +72,6 @@
             <tbody>
               <tr *ngFor="let item of filteredRequests">
                 <td class="req-code">{{ item.request_code || 'REQ-2026-00000' + item.id }}</td>
-                <td>
-                  <span class="auth-id-badge">{{ item.user_id }}</span>
-                </td>
                 <td class="user-email-cell">
                   {{ item.display_email }}
                 </td>
@@ -115,14 +111,14 @@
 
               <!-- Empty State -->
               <tr *ngIf="!loading && filteredRequests.length === 0">
-                <td colspan="8" class="empty-state">
+                <td colspan="7" class="empty-state">
                   ไม่มีรายการคำขอที่รอการอนุมัติในขณะนี้
                 </td>
               </tr>
 
               <!-- Loading State -->
               <tr *ngIf="loading">
-                <td colspan="8" class="loading-state">
+                <td colspan="7" class="loading-state">
                   กำลังโหลดข้อมูลรายการรออนุมัติ...
                 </td>
               </tr>
