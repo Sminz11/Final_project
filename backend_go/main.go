@@ -80,43 +80,16 @@ func initDB() {
 	log.Println("เชื่อมต่อ PostgreSQL เรียบร้อยแล้ว!")
 }
 
-func resolveEmailBySub(sub string) string {
-	if strings.Contains(sub, "6aabab3669a3f610cb") {
-		return "user02@test.com"
-	}
-	if strings.Contains(sub, "6a87cc434b33b4ee6e") {
-		return "user01@test.com"
-	}
-	if strings.Contains(sub, "6a87d078ae1d2669812") {
-		return "approver01@test.com"
-	}
-	if strings.Contains(sub, "6a87d0b24e918518e80dc09a") {
-		return "admin01@test.com"
-	}
-	return ""
-}
-
 func getUserEmail(c *gin.Context) string {
 	if emailVal, ok := c.Get("user_email"); ok {
-		if emailStr, ok := emailVal.(string); ok && strings.TrimSpace(emailStr) != "" && strings.Contains(emailStr, "@") {
+		if emailStr, ok := emailVal.(string); ok {
 			return emailStr
-		}
-	}
-
-	if userIDVal, ok := c.Get("user_id"); ok {
-		if userIDStr, ok := userIDVal.(string); ok {
-			if mappedEmail := resolveEmailBySub(userIDStr); mappedEmail != "" {
-				return mappedEmail
-			}
 		}
 	}
 	return ""
 }
 
 func logAudit(actorSub string, actorEmail string, action string, requestID uint, details string) {
-	if actorEmail == "" || !strings.Contains(actorEmail, "@") {
-		actorEmail = resolveEmailBySub(actorSub)
-	}
 	DB.Create(&AuditLog{
 		ActorSub:        actorSub,
 		ActorEmail:      actorEmail,
@@ -127,21 +100,90 @@ func logAudit(actorSub string, actorEmail string, action string, requestID uint,
 	})
 }
 
-// Check Role Helpers
+// Authorization Helper Functions
+func hasRole(c *gin.Context, targetRoles ...string) bool {
+	if rolesVal, ok := c.Get("roles"); ok {
+		if roles, ok := rolesVal.([]string); ok {
+			for _, userRole := range roles {
+				for _, target := range targetRoles {
+					if strings.EqualFold(userRole, target) {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+func hasPermission(c *gin.Context, targetPerms ...string) bool {
+	if permsVal, ok := c.Get("permissions"); ok {
+		if perms, ok := permsVal.([]string); ok {
+			for _, userPerm := range perms {
+				for _, target := range targetPerms {
+					if userPerm == target {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
 func isAdmin(c *gin.Context) bool {
-	return getUserEmail(c) == "admin01@test.com"
+	// 1. เช็คจาก Roles / Permissions ใน Token
+	if hasRole(c, "Admin", "REQUEST_ADMIN", "ADMIN") || hasPermission(c, "read:admin_data", "admin:all") {
+		return true
+	}
+
+	// 2. เช็คจาก Email
+	email := strings.ToLower(getUserEmail(c))
+	if email != "" && (strings.HasPrefix(email, "admin") || strings.Contains(email, "admin@")) {
+		return true
+	}
+
+	// 3. เช็คจาก Sub (User ID Claim)
+	subVal, _ := c.Get("user_id")
+	if sub, ok := subVal.(string); ok {
+		subLower := strings.ToLower(sub)
+		if strings.Contains(subLower, "admin") {
+			return true
+		}
+	}
+
+	return false
 }
 
 func isApprover(c *gin.Context) bool {
-	email := getUserEmail(c)
-	return email == "approver01@test.com" || email == "admin01@test.com"
+	// 1. เช็คจาก Roles / Permissions ใน Token หรือเป็น Admin
+	if hasRole(c, "Approver", "REQUEST_APPROVER", "APPROVER") || hasPermission(c, "approve:requests", "read:pending_requests") || isAdmin(c) {
+		return true
+	}
+
+	// 2. เช็คจาก Email
+	email := strings.ToLower(getUserEmail(c))
+	if email != "" && (strings.HasPrefix(email, "approver") || strings.Contains(email, "approver@")) {
+		return true
+	}
+
+	// 3. เช็คจาก Sub (User ID Claim)
+	subVal, _ := c.Get("user_id")
+	if sub, ok := subVal.(string); ok {
+		subLower := strings.ToLower(sub)
+		if strings.Contains(subLower, "approver") {
+			return true
+		}
+	}
+
+	return false
 }
 
 // Handlers
 
 func getProfileHandler(c *gin.Context) {
 	userIDVal, _ := c.Get("user_id")
-	userID := userIDVal.(string)
+	userID, _ := userIDVal.(string)
 	userEmail := getUserEmail(c)
 
 	c.JSON(http.StatusOK, gin.H{
@@ -190,7 +232,7 @@ func createRequestHandler(c *gin.Context) {
 
 func getRequestByIDHandler(c *gin.Context) {
 	userIDVal, _ := c.Get("user_id")
-	userID := userIDVal.(string)
+	userID, _ := userIDVal.(string)
 	id := c.Param("id")
 
 	var req Request
@@ -204,16 +246,12 @@ func getRequestByIDHandler(c *gin.Context) {
 		return
 	}
 
-	if !strings.Contains(req.RequesterEmail, "@") {
-		req.RequesterEmail = resolveEmailBySub(req.UserID)
-	}
-
 	c.JSON(http.StatusOK, req)
 }
 
 func updateDraftHandler(c *gin.Context) {
 	userIDVal, _ := c.Get("user_id")
-	userID := userIDVal.(string)
+	userID, _ := userIDVal.(string)
 	id := c.Param("id")
 
 	var req Request
@@ -262,7 +300,7 @@ func updateDraftHandler(c *gin.Context) {
 
 func submitRequestHandler(c *gin.Context) {
 	userIDVal, _ := c.Get("user_id")
-	userID := userIDVal.(string)
+	userID, _ := userIDVal.(string)
 	userEmail := getUserEmail(c)
 	id := c.Param("id")
 
@@ -295,15 +333,9 @@ func submitRequestHandler(c *gin.Context) {
 
 func getMyRequestsHandler(c *gin.Context) {
 	userIDVal, _ := c.Get("user_id")
-	userID := userIDVal.(string)
+	userID, _ := userIDVal.(string)
 	var requests []Request
 	DB.Where("user_id = ?", userID).Order("created_at desc").Find(&requests)
-
-	for i := range requests {
-		if !strings.Contains(requests[i].RequesterEmail, "@") {
-			requests[i].RequesterEmail = resolveEmailBySub(requests[i].UserID)
-		}
-	}
 
 	c.JSON(http.StatusOK, requests)
 }
@@ -317,12 +349,6 @@ func getPendingRequestsHandler(c *gin.Context) {
 	var requests []Request
 	DB.Where("status = ?", "SUBMITTED").Order("created_at desc").Find(&requests)
 
-	for i := range requests {
-		if !strings.Contains(requests[i].RequesterEmail, "@") {
-			requests[i].RequesterEmail = resolveEmailBySub(requests[i].UserID)
-		}
-	}
-
 	c.JSON(http.StatusOK, requests)
 }
 
@@ -333,7 +359,7 @@ func approveRequestHandler(c *gin.Context) {
 	}
 
 	userIDVal, _ := c.Get("user_id")
-	userID := userIDVal.(string)
+	userID, _ := userIDVal.(string)
 	userEmail := getUserEmail(c)
 	id := c.Param("id")
 
@@ -363,7 +389,7 @@ func rejectRequestHandler(c *gin.Context) {
 	}
 
 	userIDVal, _ := c.Get("user_id")
-	userID := userIDVal.(string)
+	userID, _ := userIDVal.(string)
 	userEmail := getUserEmail(c)
 	id := c.Param("id")
 
@@ -402,12 +428,6 @@ func getAllRequestsAdminHandler(c *gin.Context) {
 	var requests []Request
 	DB.Order("created_at desc").Find(&requests)
 
-	for i := range requests {
-		if !strings.Contains(requests[i].RequesterEmail, "@") {
-			requests[i].RequesterEmail = resolveEmailBySub(requests[i].UserID)
-		}
-	}
-
 	c.JSON(http.StatusOK, requests)
 }
 
@@ -419,12 +439,6 @@ func getAuditLogsHandler(c *gin.Context) {
 
 	var logs []AuditLog
 	DB.Order("created_at desc").Find(&logs)
-
-	for i := range logs {
-		if !strings.Contains(logs[i].ActorEmail, "@") {
-			logs[i].ActorEmail = resolveEmailBySub(logs[i].ActorSub)
-		}
-	}
 
 	c.JSON(http.StatusOK, logs)
 }
@@ -439,11 +453,11 @@ func main() {
 
 	r := gin.Default()
 
-	// CORS Middleware
+	// CORS Middleware - ปรับแก้เพื่อปลดล็อก Preflight Block สำหรับ X-User-Email
 	r.Use(func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "http://localhost:4200")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE, PATCH")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization, X-User-Email, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization, X-User-Email, x-user-email, X-Requested-With")
 		c.Writer.Header().Set("Access-Control-Expose-Headers", "Content-Length")
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 
@@ -457,22 +471,18 @@ func main() {
 	v1 := r.Group("/api/v1")
 	v1.Use(middleware.ValidateJWT(auth0Domain, apiAudience))
 	{
-		// 1. Profile Endpoint
 		v1.GET("/profile", getProfileHandler)
 
-		// 2. REQUEST_USER Endpoints
 		v1.GET("/requests", getMyRequestsHandler)
 		v1.GET("/requests/:id", getRequestByIDHandler)
 		v1.POST("/requests", createRequestHandler)
 		v1.PUT("/requests/:id", updateDraftHandler)
 		v1.POST("/requests/:id/submit", submitRequestHandler)
 
-		// 3. REQUEST_APPROVER Endpoints
 		v1.GET("/approvals/pending", getPendingRequestsHandler)
 		v1.POST("/requests/:id/approve", approveRequestHandler)
 		v1.POST("/requests/:id/reject", rejectRequestHandler)
 
-		// 4. REQUEST_ADMIN Endpoints
 		v1.GET("/admin/requests", getAllRequestsAdminHandler)
 		v1.GET("/admin/audit-logs", getAuditLogsHandler)
 		v1.GET("/admin/audit-log", getAuditLogsHandler)
