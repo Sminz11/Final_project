@@ -1,3 +1,4 @@
+
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -23,7 +24,10 @@ export class ApproverDashboardComponent implements OnInit {
   pendingRequests: any[] = [];
   filteredRequests: any[] = [];
   loading: boolean = false;
+
   searchTerm: string = '';
+  readonly maxSearchLength: number = 150;
+
   selectedType: string = '';
 
   constructor(
@@ -36,7 +40,7 @@ export class ApproverDashboardComponent implements OnInit {
     this.loadPendingRequests();
   }
 
-  // Helper สำหรับสร้าง Headers ที่แนบทั้ง Bearer Token และ X-User-Email
+  // สร้าง Headers สำหรับเรียก API พร้อม Access Token
   private getAuthHeaders(callback: (headers: HttpHeaders) => void) {
     combineLatest([
       this.auth.getAccessTokenSilently(),
@@ -44,7 +48,7 @@ export class ApproverDashboardComponent implements OnInit {
     ]).pipe(take(1)).subscribe({
       next: ([token, user]) => {
         let headers = new HttpHeaders({
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`
         });
 
         if (user && user.email) {
@@ -60,21 +64,28 @@ export class ApproverDashboardComponent implements OnInit {
     });
   }
 
-  loadPendingRequests() {
+  loadPendingRequests(): void {
     this.loading = true;
+
     this.getAuthHeaders((headers) => {
-      this.http.get<any[]>('http://localhost:8080/api/v1/approvals/pending', { headers }).subscribe({
+      this.http.get<any[]>(
+        'http://localhost:8080/api/v1/approvals/pending',
+        { headers }
+      ).subscribe({
         next: (res) => {
-          this.pendingRequests = res.map(item => {
-            // ดึงค่า requester_email จาก Backend เป็นหลัก
-            const rawEmail = item.requester_email || item.user_email || item.email || '';
+          this.pendingRequests = (res || []).map(item => {
+            const rawEmail =
+              item.requester_email ||
+              item.user_email ||
+              item.email ||
+              '';
 
             return {
               ...item,
-              // แสดงอีเมลจริงที่ทำรายการเข้ามา หากไม่มีให้ใช้ user_id
               display_email: rawEmail || item.user_id || 'N/A'
             };
           });
+
           this.applyFilter();
           this.loading = false;
         },
@@ -86,22 +97,70 @@ export class ApproverDashboardComponent implements OnInit {
     });
   }
 
-  applyFilter() {
-    this.filteredRequests = this.pendingRequests.filter(item => {
-      const matchesSearch = !this.searchTerm || 
-        (item.req_code && item.req_code.toLowerCase().includes(this.searchTerm.toLowerCase())) ||
-        (item.user_id && item.user_id.toLowerCase().includes(this.searchTerm.toLowerCase())) ||
-        (item.display_email && item.display_email.toLowerCase().includes(this.searchTerm.toLowerCase())) ||
-        (item.title && item.title.toLowerCase().includes(this.searchTerm.toLowerCase())) ||
-        (item.target_system && item.target_system.toLowerCase().includes(this.searchTerm.toLowerCase()));
+  // ค้นหาจากข้อมูลคำขอและกรองตามประเภท
+  applyFilter(): void {
+    const term = (this.searchTerm || '')
+      .slice(0, this.maxSearchLength)
+      .trim()
+      .toLocaleLowerCase();
 
-      const matchesType = !this.selectedType || item.request_type === this.selectedType;
+    this.filteredRequests = this.pendingRequests.filter(item => {
+      // ฟิลด์ที่ต้องการค้นหาโดยเฉพาะ
+      const searchableValues: unknown[] = [
+        item.id,
+        item.req_code,
+        item.request_code,
+        item.user_id,
+        item.requester_sub,
+        item.requester_email,
+        item.user_email,
+        item.email,
+        item.display_email,
+        item.title,
+        item.request_type,
+        item.target_system,
+        item.status,
+        item.reason,
+        item.reject_reason,
+        item.rejectReason,
+        item.created_at,
+        item.createdAt,
+        item.submitted_at,
+        item.submittedAt
+      ];
+
+      // รวมฟิลด์ข้อความ ตัวเลข และ boolean อื่น ๆ
+      // ที่ API ส่งมาในแต่ละรายการ
+      if (item && typeof item === 'object') {
+        Object.values(item).forEach((value: unknown) => {
+          if (
+            typeof value === 'string' ||
+            typeof value === 'number' ||
+            typeof value === 'boolean'
+          ) {
+            searchableValues.push(value);
+          }
+        });
+      }
+
+      const matchesSearch =
+        !term ||
+        searchableValues.some((value: unknown) =>
+          String(value ?? '')
+            .toLocaleLowerCase()
+            .includes(term)
+        );
+
+      const matchesType =
+        !this.selectedType ||
+        String(item.request_type ?? '').toUpperCase().trim() ===
+          this.selectedType.toUpperCase().trim();
 
       return matchesSearch && matchesType;
     });
   }
 
-  approveRequest(id: number, reqCode: string) {
+  approveRequest(id: number, reqCode: string): void {
     Swal.fire({
       title: 'ยืนยันการอนุมัติคำขอ?',
       text: `คุณต้องการอนุมัติรายการคำขอ [${reqCode}] ใช่หรือไม่`,
@@ -119,7 +178,7 @@ export class ApproverDashboardComponent implements OnInit {
     });
   }
 
-  rejectRequest(id: number, reqCode: string) {
+  rejectRequest(id: number, reqCode: string): void {
     Swal.fire({
       title: 'ปฏิเสธคำขอเข้าใช้งาน?',
       text: `ระบุเหตุผลในการปฏิเสธคำขอ [${reqCode}]:`,
@@ -145,9 +204,13 @@ export class ApproverDashboardComponent implements OnInit {
     });
   }
 
-  private sendApprove(id: number) {
+  private sendApprove(id: number): void {
     this.getAuthHeaders((headers) => {
-      this.http.post(`http://localhost:8080/api/v1/requests/${id}/approve`, {}, { headers }).subscribe({
+      this.http.post(
+        `http://localhost:8080/api/v1/requests/${id}/approve`,
+        {},
+        { headers }
+      ).subscribe({
         next: () => {
           Swal.fire({
             title: 'สำเร็จ!',
@@ -163,7 +226,10 @@ export class ApproverDashboardComponent implements OnInit {
           console.error('Approve Error:', err);
           Swal.fire({
             title: 'เกิดข้อผิดพลาด',
-            text: err.error?.error || err.error?.message || 'ไม่สามารถอนุมัติรายการได้',
+            text:
+              err.error?.error ||
+              err.error?.message ||
+              'ไม่สามารถอนุมัติรายการได้',
             icon: 'error',
             confirmButtonText: 'ตกลง',
             confirmButtonColor: '#00a3e0'
@@ -173,12 +239,22 @@ export class ApproverDashboardComponent implements OnInit {
     });
   }
 
-  private sendReject(id: number, rejectReason: string) {
+  private sendReject(id: number, rejectReason: string): void {
     this.getAuthHeaders((headers) => {
-      const jsonHeaders = headers.set('Content-Type', 'application/json');
-      const payload = { reject_reason: rejectReason };
+      const jsonHeaders = headers.set(
+        'Content-Type',
+        'application/json'
+      );
 
-      this.http.post(`http://localhost:8080/api/v1/requests/${id}/reject`, payload, { headers: jsonHeaders }).subscribe({
+      const payload = {
+        reject_reason: rejectReason
+      };
+
+      this.http.post(
+        `http://localhost:8080/api/v1/requests/${id}/reject`,
+        payload,
+        { headers: jsonHeaders }
+      ).subscribe({
         next: () => {
           Swal.fire({
             title: 'สำเร็จ!',
@@ -194,7 +270,10 @@ export class ApproverDashboardComponent implements OnInit {
           console.error('Reject Error:', err);
           Swal.fire({
             title: 'เกิดข้อผิดพลาด',
-            text: err.error?.error || err.error?.message || 'ไม่สามารถปฏิเสธรายการได้',
+            text:
+              err.error?.error ||
+              err.error?.message ||
+              'ไม่สามารถปฏิเสธรายการได้',
             icon: 'error',
             confirmButtonText: 'ตกลง',
             confirmButtonColor: '#00a3e0'

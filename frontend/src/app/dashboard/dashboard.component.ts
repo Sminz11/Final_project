@@ -1,3 +1,4 @@
+
 import { Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -19,7 +20,10 @@ export class DashboardComponent implements OnInit {
 
   myRequests: RequestItem[] = [];
   filteredRequests: RequestItem[] = [];
+
   searchTerm: string = '';
+  readonly maxSearchLength: number = 150;
+
   selectedStatus: string = 'ALL';
   loadingRequests: boolean = false;
 
@@ -60,6 +64,7 @@ export class DashboardComponent implements OnInit {
         next: (data: RequestItem[]) => {
           this.myRequests = (data || []).map((item: RequestItem) => {
             const raw = item as Record<string, any>;
+
             return {
               ...item,
               req_code: item.req_code || raw['reqCode'] || String(item.id),
@@ -79,20 +84,62 @@ export class DashboardComponent implements OnInit {
       });
   }
 
+  // ค้นหาจากข้อมูลคำขอ
   applyFilter(): void {
-    const term = (this.searchTerm || '').trim().toLowerCase();
+    const term = (this.searchTerm || '')
+      .slice(0, this.maxSearchLength)
+      .trim()
+      .toLocaleLowerCase();
 
     this.filteredRequests = this.myRequests.filter((req: RequestItem) => {
-      const matchSearch = !term ||
-        (req.req_code && String(req.req_code).toLowerCase().includes(term)) ||
-        (req.title && String(req.title).toLowerCase().includes(term)) ||
-        (req.target_system && String(req.target_system).toLowerCase().includes(term));
+      const raw = req as unknown as Record<string, unknown>;
+      // ฟิลด์ที่ใช้ค้นหา
+      const searchableValues: unknown[] = [
+        req.id,
+        req.req_code,
+        raw['reqCode'],
+        req.title,
+        req.request_type,
+        raw['requestType'],
+        req.target_system,
+        raw['targetSystem'],
+        req.status,
+        req.reason,
+        raw['reject_reason'],
+        raw['rejectReason'],
+        raw['created_at'],
+        raw['createdAt'],
+        raw['submitted_at'],
+        raw['submittedAt'],
+        raw['approved_at'],
+        raw['approvedAt']
+      ];
 
-      const matchStatus = this.selectedStatus === 'ALL' || req.status === this.selectedStatus;
+      // เพิ่มฟิลด์ข้อความ ตัวเลข และ boolean อื่น ๆ
+      Object.values(raw).forEach((value: unknown) => {
+        if (
+          typeof value === 'string' ||
+          typeof value === 'number' ||
+          typeof value === 'boolean'
+        ) {
+          searchableValues.push(value);
+        }
+      });
+
+      const matchSearch =
+        !term ||
+        searchableValues.some((value: unknown) =>
+          String(value ?? '').toLocaleLowerCase().includes(term)
+        );
+
+      const matchStatus =
+        this.selectedStatus === 'ALL' ||
+        req.status === this.selectedStatus;
 
       return matchSearch && matchStatus;
     });
 
+    // เปลี่ยนคำค้นหาแล้วกลับไปหน้าแรก
     this.currentPage = 1;
   }
 
@@ -108,7 +155,11 @@ export class DashboardComponent implements OnInit {
 
   get pagedRequests(): RequestItem[] {
     const startIndex = (this.currentPage - 1) * this.pageSize;
-    return this.filteredRequests.slice(startIndex, startIndex + this.pageSize);
+
+    return this.filteredRequests.slice(
+      startIndex,
+      startIndex + this.pageSize
+    );
   }
 
   get totalPages(): number {
@@ -123,11 +174,35 @@ export class DashboardComponent implements OnInit {
 
   getStatusStyle(status: string): { [key: string]: string } {
     switch (status) {
-      case 'DRAFT': return { 'background-color': '#f1f5f9', 'color': '#475569' };
-      case 'SUBMITTED': return { 'background-color': '#e0f2fe', 'color': '#0288d1' };
-      case 'APPROVED': return { 'background-color': '#dcfce7', 'color': '#15803d' };
-      case 'REJECTED': return { 'background-color': '#fee2e2', 'color': '#b91c1c' };
-      default: return { 'background-color': '#f1f5f9', 'color': '#475569' };
+      case 'DRAFT':
+        return {
+          'background-color': '#f1f5f9',
+          'color': '#475569'
+        };
+
+      case 'SUBMITTED':
+        return {
+          'background-color': '#e0f2fe',
+          'color': '#0288d1'
+        };
+
+      case 'APPROVED':
+        return {
+          'background-color': '#dcfce7',
+          'color': '#15803d'
+        };
+
+      case 'REJECTED':
+        return {
+          'background-color': '#fee2e2',
+          'color': '#b91c1c'
+        };
+
+      default:
+        return {
+          'background-color': '#f1f5f9',
+          'color': '#475569'
+        };
     }
   }
 
@@ -160,13 +235,19 @@ export class DashboardComponent implements OnInit {
           confirmButtonText: 'ตกลง',
           customClass: { popup: 'swal-ktb-popup' }
         });
+
         this.loadMyRequests();
       },
+
       error: (err: any) => {
         console.error('Submit error:', err);
+
         Swal.fire({
           title: 'เกิดข้อผิดพลาด!',
-          text: err.error?.error || err.error?.message || 'ไม่สามารถส่งคำขอได้ กรุณาลองใหม่อีกครั้ง',
+          text:
+            err.error?.error ||
+            err.error?.message ||
+            'ไม่สามารถส่งคำขอได้ กรุณาลองใหม่อีกครั้ง',
           icon: 'error',
           confirmButtonColor: '#ef4444',
           customClass: { popup: 'swal-ktb-popup' }

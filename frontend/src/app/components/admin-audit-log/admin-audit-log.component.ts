@@ -1,3 +1,4 @@
+
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -10,9 +11,9 @@ import { catchError, of, combineLatest } from 'rxjs';
   selector: 'app-admin-audit-log',
   standalone: true,
   imports: [
-    CommonModule, 
-    FormsModule, 
-    RouterModule, 
+    CommonModule,
+    FormsModule,
+    RouterModule,
     HttpClientModule
   ],
   templateUrl: './admin-audit-log.component.html',
@@ -30,6 +31,8 @@ export class AdminAuditLogComponent implements OnInit {
 
   // Filter States
   searchTerm: string = '';
+  readonly maxSearchLength: number = 150;
+
   selectedAction: string = 'ALL';
   startDate: string = '';
   endDate: string = '';
@@ -61,14 +64,17 @@ export class AdminAuditLogComponent implements OnInit {
       if (token) {
         headers = headers.set('Authorization', `Bearer ${token}`);
       }
-      
-      // ส่ง X-User-Email ไปให้ Backend เพื่อใช้ยืนยันสิทธิ์ Admin Fallback
+
+      // ส่ง X-User-Email ไปให้ Backend
       if (user && user.email) {
         headers = headers.set('X-User-Email', user.email);
       }
 
-      // ดึงข้อมูลจาก Go Backend Endpoint: /api/v1/admin/audit-logs
-      this.http.get<any[]>('http://localhost:8080/api/v1/admin/audit-logs', { headers }).pipe(
+      // ดึงข้อมูลจาก Go Backend
+      this.http.get<any[]>(
+        'http://localhost:8080/api/v1/admin/audit-logs',
+        { headers }
+      ).pipe(
         catchError((err) => {
           console.error('API Error:', err);
           return of([]);
@@ -78,16 +84,18 @@ export class AdminAuditLogComponent implements OnInit {
           this.rawAuditLogs = res.map(log => {
             const actor = log.actor_sub || '';
 
-            // 1. ดึง actor_email จาก DB ตรงๆ ( fallback ไปยังวิธี Map เดิมหากเป็น log เก่าที่ actor_email เป็นค่าว่าง )
+            // ดึง actor_email จาก DB และรองรับ Log เก่า
             let emailDisplay = log.actor_email || '';
 
-            // Fallback รองรับ Log ข้อมูลชุดเก่า
             if (!emailDisplay) {
               if (['APPROVE', 'REJECT'].includes(log.action)) {
                 emailDisplay = 'approver01@test.com';
               } else if (actor.includes('admin')) {
                 emailDisplay = 'admin01@test.com';
-              } else if (actor.includes('user02') || actor.includes('8a12b44')) {
+              } else if (
+                actor.includes('user02') ||
+                actor.includes('8a12b44')
+              ) {
                 emailDisplay = 'user02@test.com';
               } else if (actor.includes('@')) {
                 emailDisplay = actor;
@@ -96,21 +104,30 @@ export class AdminAuditLogComponent implements OnInit {
               }
             }
 
-            // 2. กำหนด Role Display ให้สวยงาม
+            // กำหนด Role Display
             let roleDisplay = 'User';
+
             if (['APPROVE', 'REJECT'].includes(log.action)) {
               roleDisplay = 'Approver';
-            } else if (actor.includes('admin') || emailDisplay.includes('admin')) {
+            } else if (
+              actor.includes('admin') ||
+              emailDisplay.includes('admin')
+            ) {
               roleDisplay = 'Admin';
             }
 
-            // 3. จัดการแปลงวันที่ให้อยู่ในฟอร์แมต YYYY-MM-DD HH:mm:ss อย่างปลอดภัย
+            // แปลงวันที่เป็น YYYY-MM-DD HH:mm:ss
             let formattedTimestamp = '';
+
             if (log.created_at) {
               const d = new Date(log.created_at);
+
               if (!isNaN(d.getTime())) {
                 const pad = (n: number) => n < 10 ? '0' + n : n;
-                formattedTimestamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+
+                formattedTimestamp =
+                  `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
+                  `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
               }
             }
 
@@ -123,7 +140,7 @@ export class AdminAuditLogComponent implements OnInit {
               timestamp: formattedTimestamp,
               details: log.details || '-'
             };
-          }).sort((a, b) => b.id - a.id); // หน้าเว็บแสดงรายการล่าสุดขึ้นก่อน (ID มากไปน้อย)
+          }).sort((a, b) => b.id - a.id);
         } else {
           this.rawAuditLogs = [];
         }
@@ -145,24 +162,58 @@ export class AdminAuditLogComponent implements OnInit {
     this.selectedLog = null;
   }
 
+  // ค้นหา Audit Log และใช้ตัวกรองร่วมกัน
   applyFilter(): void {
+    const search = (this.searchTerm || '')
+      .slice(0, this.maxSearchLength)
+      .trim()
+      .toLocaleLowerCase();
+
     this.filteredLogs = this.rawAuditLogs.filter(log => {
-      const search = this.searchTerm.trim().toLowerCase();
-      const matchesSearch = !search || 
-        (log.email && log.email.toLowerCase().includes(search)) ||
-        (log.user_id && log.user_id.toLowerCase().includes(search)) ||
-        (log.details && log.details.toLowerCase().includes(search));
+      // ฟิลด์ที่ค้นหาได้
+      const searchableValues: unknown[] = [
+        log.id,
+        log.email,
+        log.user,
+        log.user_id,
+        log.action,
+        log.timestamp,
+        log.details
+      ];
 
-      const matchesAction = this.selectedAction === 'ALL' || log.action === this.selectedAction;
+      const matchesSearch =
+        !search ||
+        searchableValues.some(value =>
+          String(value ?? '').toLocaleLowerCase().includes(search)
+        );
 
-      // สกัดเฉพาะ YYYY-MM-DD เพื่อเอามาเปรียบเทียบกับ Date Picker
-      const logDate = log.timestamp ? log.timestamp.substring(0, 10) : '';
-      const matchesStart = !this.startDate || (logDate && logDate >= this.startDate);
-      const matchesEnd = !this.endDate || (logDate && logDate <= this.endDate);
+      // กรองตาม Action
+      const matchesAction =
+        this.selectedAction === 'ALL' ||
+        log.action === this.selectedAction;
 
-      return matchesSearch && matchesAction && matchesStart && matchesEnd;
+      // เปรียบเทียบวันที่ในรูปแบบ YYYY-MM-DD
+      const logDate = log.timestamp
+        ? log.timestamp.substring(0, 10)
+        : '';
+
+      const matchesStart =
+        !this.startDate ||
+        (!!logDate && logDate >= this.startDate);
+
+      const matchesEnd =
+        !this.endDate ||
+        (!!logDate && logDate <= this.endDate);
+
+      return (
+        matchesSearch &&
+        matchesAction &&
+        matchesStart &&
+        matchesEnd
+      );
     });
 
+    // กลับไปหน้าแรกเมื่อเปลี่ยนตัวกรอง
     this.currentPage = 1;
     this.updatePagination();
   }
@@ -176,9 +227,15 @@ export class AdminAuditLogComponent implements OnInit {
   }
 
   updatePagination(): void {
-    this.totalPages = Math.ceil(this.filteredLogs.length / this.pageSize) || 1;
+    this.totalPages =
+      Math.ceil(this.filteredLogs.length / this.pageSize) || 1;
+
     const startIndex = (this.currentPage - 1) * this.pageSize;
-    this.pagedLogs = this.filteredLogs.slice(startIndex, startIndex + this.pageSize);
+
+    this.pagedLogs = this.filteredLogs.slice(
+      startIndex,
+      startIndex + this.pageSize
+    );
   }
 
   changePage(page: number): void {
@@ -189,16 +246,24 @@ export class AdminAuditLogComponent implements OnInit {
   }
 
   get minItemCount(): number {
-    return Math.min(this.currentPage * this.pageSize, this.filteredLogs.length);
+    return Math.min(
+      this.currentPage * this.pageSize,
+      this.filteredLogs.length
+    );
   }
 
   getActionClass(action: string): string {
     switch (action) {
-      case 'CREATE_DRAFT': return 'action-draft';
-      case 'SUBMIT': return 'action-submit';
-      case 'APPROVE': return 'action-approve';
-      case 'REJECT': return 'action-reject';
-      default: return 'action-default';
+      case 'CREATE_DRAFT':
+        return 'action-draft';
+      case 'SUBMIT':
+        return 'action-submit';
+      case 'APPROVE':
+        return 'action-approve';
+      case 'REJECT':
+        return 'action-reject';
+      default:
+        return 'action-default';
     }
   }
 
@@ -208,15 +273,24 @@ export class AdminAuditLogComponent implements OnInit {
       return;
     }
 
-    // 1. เรียงลำดับข้อมูลตาม ID จากน้อยไปมาก (1 -> 22) สำหรับไฟล์ CSV
-    const sortedLogs = [...this.filteredLogs].sort((a, b) => a.id - b.id);
+    // เรียงลำดับข้อมูลใน CSV จาก ID น้อยไปมาก
+    const sortedLogs = [...this.filteredLogs].sort(
+      (a, b) => a.id - b.id
+    );
 
-    // 2. กำหนด Header (ตัด Auth ID ออกเรียบร้อย)
-    const headers = ['ID', 'Email', 'User', 'Action', 'Timestamp', 'Details'];
+    const headers = [
+      'ID',
+      'Email',
+      'User',
+      'Action',
+      'Timestamp',
+      'Details'
+    ];
 
-    // 3. แปลงข้อมูลแต่ละรายการเป็น CSV Row
+    // แปลงข้อมูลแต่ละรายการเป็น CSV Row
     const csvRows = sortedLogs.map(log => {
-      const cleanDetails = `"${(log.details || '').replace(/"/g, '""')}"`;
+      const cleanDetails =
+        `"${(log.details || '').replace(/"/g, '""')}"`;
       const cleanEmail = `"${log.email || ''}"`;
       const cleanUser = `"${log.user || ''}"`;
       const cleanAction = `"${log.action || ''}"`;
@@ -232,20 +306,27 @@ export class AdminAuditLogComponent implements OnInit {
       ].join(',');
     });
 
-    // 4. รวม Header และข้อมูล พร้อมใส่ UTF-8 BOM (\uFEFF) ให้อ่านภาษาไทยใน Excel ได้สมบูรณ์
-    const csvContent = '\uFEFF' + [headers.join(','), ...csvRows].join('\n');
+    // เพิ่ม UTF-8 BOM เพื่อรองรับภาษาไทยใน Excel
+    const csvContent =
+      '\uFEFF' + [headers.join(','), ...csvRows].join('\n');
 
-    // 5. ดาวน์โหลดไฟล์ CSV
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(
+      [csvContent],
+      { type: 'text/csv;charset=utf-8;' }
+    );
+
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    
+
     const today = new Date().toISOString().split('T')[0];
+
     link.setAttribute('href', url);
     link.setAttribute('download', `audit_log_${today}.csv`);
+
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+
     URL.revokeObjectURL(url);
   }
 }

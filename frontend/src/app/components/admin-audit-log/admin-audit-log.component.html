@@ -1,10 +1,19 @@
+
 <div class="audit-container">
+  <!-- Header -->
   <div class="audit-header">
     <div>
       <h2 class="audit-title">Admin Audit Log</h2>
-      <p class="audit-subtitle">บันทึกประวัติการใช้งานและทำรายการทั้งหมดในระบบ</p>
+      <p class="audit-subtitle">
+        บันทึกประวัติการใช้งานและทำรายการทั้งหมดในระบบ
+      </p>
     </div>
-    <button (click)="exportToCSV()" *ngIf="filteredLogs.length > 0" class="btn-export">
+
+    <button
+      (click)="exportToCSV()"
+      *ngIf="filteredLogs.length > 0"
+      class="btn-export"
+    >
       Export CSV
     </button>
   </div>
@@ -12,15 +21,23 @@
   <!-- Filter Bar -->
   <div class="filter-card">
     <div class="filter-group">
-      <input 
-        type="text" 
-        class="filter-input" 
-        placeholder="ค้นหาด้วย Email, Details..." 
-        [(ngModel)]="searchTerm" 
-        (input)="applyFilter()"
+      <!-- Search -->
+      <input
+        type="text"
+        class="filter-input"
+        placeholder="ค้นหา ID, Email, User, Action, วันที่, Details..."
+        [(ngModel)]="searchTerm"
+        (ngModelChange)="applyFilter()"
+        [attr.maxlength]="maxSearchLength"
+        aria-label="ค้นหาประวัติ Audit Log"
       />
-      
-      <select class="filter-select" [(ngModel)]="selectedAction" (change)="applyFilter()">
+
+      <!-- Action Filter -->
+      <select
+        class="filter-select"
+        [(ngModel)]="selectedAction"
+        (change)="applyFilter()"
+      >
         <option value="ALL">สถานะทั้งหมด (Actions)</option>
         <option value="CREATE_DRAFT">CREATE_DRAFT</option>
         <option value="SUBMIT">SUBMIT</option>
@@ -28,16 +45,38 @@
         <option value="REJECT">REJECT</option>
       </select>
 
+      <!-- Date Filter -->
       <div class="date-group">
-        <input type="date" class="filter-date" [(ngModel)]="startDate" (change)="applyFilter()" />
+        <input
+          type="date"
+          class="filter-date"
+          [(ngModel)]="startDate"
+          (change)="applyFilter()"
+          aria-label="วันที่เริ่มต้น"
+        />
+
         <span>ถึง</span>
-        <input type="date" class="filter-date" [(ngModel)]="endDate" (change)="applyFilter()" />
+
+        <input
+          type="date"
+          class="filter-date"
+          [(ngModel)]="endDate"
+          (change)="applyFilter()"
+          aria-label="วันที่สิ้นสุด"
+        />
       </div>
 
-      <button class="btn-reset" (click)="resetFilters()">ล้างตัวกรอง</button>
+      <!-- Reset Filters -->
+      <button
+        class="btn-reset"
+        (click)="resetFilters()"
+      >
+        ล้างตัวกรอง
+      </button>
     </div>
   </div>
 
+  <!-- Loading State -->
   <div *ngIf="loading" class="loading-state">
     กำลังโหลดข้อมูล...
   </div>
@@ -56,17 +95,23 @@
             <th>Details</th>
           </tr>
         </thead>
+
         <tbody>
-          <!-- เพิ่ม (click) และ cursor-pointer บน tr เพื่อให้กดเปิด Modal ได้ -->
-          <tr *ngFor="let log of pagedLogs" (click)="openDetailModal(log)" class="log-row">
+          <tr
+            *ngFor="let log of pagedLogs"
+            (click)="openDetailModal(log)"
+            class="log-row"
+          >
             <td>{{ log.id }}</td>
             <td>{{ log.email }}</td>
             <td>{{ log.user }}</td>
+
             <td>
               <span [class]="'badge-action ' + getActionClass(log.action)">
                 {{ log.action }}
               </span>
             </td>
+
             <td>{{ log.timestamp }}</td>
             <td>{{ log.details }}</td>
           </tr>
@@ -79,25 +124,64 @@
       ไม่พบข้อมูล Audit Log ที่ตรงตามเงื่อนไข
     </div>
 
-    <!-- Pagination Controls -->
-    <div class="pagination-wrapper" *ngIf="filteredLogs.length > 0">
+    <!-- Pagination -->
+    <div
+      class="pagination-wrapper"
+      *ngIf="filteredLogs.length > 0"
+    >
       <div class="pagination-info">
-        แสดง {{ (currentPage - 1) * pageSize + 1 }} ถึง {{ minItemCount }} จากทั้งหมด {{ filteredLogs.length }} รายการ
+        แสดง
+        {{ (currentPage - 1) * pageSize + 1 }}
+        ถึง
+        {{ minItemCount }}
+        จากทั้งหมด
+        {{ filteredLogs.length }}
+        รายการ
       </div>
+
       <div class="pagination-buttons">
-        <button [disabled]="currentPage === 1" (click)="changePage(currentPage - 1)">ก่อนหน้า</button>
-        <span class="page-number">หน้า {{ currentPage }} / {{ totalPages }}</span>
-        <button [disabled]="currentPage === totalPages" (click)="changePage(currentPage + 1)">ถัดไป</button>
+        <button
+          [disabled]="currentPage === 1"
+          (click)="changePage(currentPage - 1)"
+        >
+          ก่อนหน้า
+        </button>
+
+        <span class="page-number">
+          หน้า {{ currentPage }} / {{ totalPages }}
+        </span>
+
+        <button
+          [disabled]="currentPage === totalPages"
+          (click)="changePage(currentPage + 1)"
+        >
+          ถัดไป
+        </button>
       </div>
     </div>
   </div>
 
   <!-- Detail Modal -->
-  <div *ngIf="showModal" class="modal-backdrop" (click)="closeDetailModal()">
-    <div class="modal-card" (click)="$event.stopPropagation()">
+  <div
+    *ngIf="showModal"
+    class="modal-backdrop"
+    (click)="closeDetailModal()"
+  >
+    <div
+      class="modal-card"
+      (click)="$event.stopPropagation()"
+    >
       <div class="modal-header">
-        <h3 class="modal-title">Audit Log Details #{{ selectedLog?.id }}</h3>
-        <button (click)="closeDetailModal()" class="modal-close-btn">&times;</button>
+        <h3 class="modal-title">
+          Audit Log Details #{{ selectedLog?.id }}
+        </h3>
+
+        <button
+          (click)="closeDetailModal()"
+          class="modal-close-btn"
+        >
+          &times;
+        </button>
       </div>
 
       <div class="modal-body" *ngIf="selectedLog">
@@ -105,20 +189,26 @@
           <span class="detail-label">Email:</span>
           <span>{{ selectedLog.email }}</span>
         </div>
+
         <div class="detail-item">
           <span class="detail-label">User Role:</span>
           <span>{{ selectedLog.user }}</span>
         </div>
+
         <div class="detail-item">
           <span class="detail-label">Action:</span>
-          <span [class]="'badge-action ' + getActionClass(selectedLog.action)">
+          <span
+            [class]="'badge-action ' + getActionClass(selectedLog.action)"
+          >
             {{ selectedLog.action }}
           </span>
         </div>
+
         <div class="detail-item">
           <span class="detail-label">Timestamp:</span>
           <span>{{ selectedLog.timestamp }}</span>
         </div>
+
         <div class="detail-box">
           <span class="detail-label block">Details:</span>
           <p class="detail-text">{{ selectedLog.details }}</p>
@@ -126,7 +216,12 @@
       </div>
 
       <div class="modal-footer">
-        <button (click)="closeDetailModal()" class="btn-close">ปิดหน้าต่าง</button>
+        <button
+          (click)="closeDetailModal()"
+          class="btn-close"
+        >
+          ปิดหน้าต่าง
+        </button>
       </div>
     </div>
   </div>
