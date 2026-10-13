@@ -1,69 +1,135 @@
+
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterModule } from '@angular/router';
-import { AuthService } from '@auth0/auth0-angular'; // 1. Import AuthService เพิ่มเติม
+import { Router, RouterModule, ActivatedRoute } from '@angular/router';
+import { AuthService } from '@auth0/auth0-angular';
+import { take } from 'rxjs/operators';
 import Swal from 'sweetalert2';
-import { RequestService } from '../../services/request.service';
+import { RequestService, RequestItem } from '../../services/request.service';
 
 @Component({
   selector: 'app-create-request',
   standalone: true,
-  imports: [
-    CommonModule,
-    FormsModule,
-    RouterModule
-  ],
+  imports: [CommonModule, FormsModule, RouterModule],
   templateUrl: './create-request.component.html',
   styleUrls: ['./create-request.component.css']
 })
 export class CreateRequestComponent implements OnInit {
-  title: string = '';
-  requestType: string = 'DATABASE';
-  targetSystem: string = '';
-  reason: string = '';
-  isSubmitting: boolean = false;
-  
-  currentUser: any = null; // เก็บข้อมูล User ปัจจุบัน
+  title = '';
+  requestType = 'DATABASE';
+  targetSystem = '';
+  reason = '';
+  isSubmitting = false;
+  currentUser: any = null;
+
+  // โหมดแก้ไข
+  editMode = false;
+  requestId: number | null = null;
+  loadingRequest = false;
 
   constructor(
     private requestService: RequestService,
-    private auth: AuthService, // 2. Inject AuthService เข้ามาใน constructor
-    private router: Router
+    private auth: AuthService,
+    private router: Router,
+    private route: ActivatedRoute
   ) {}
 
   ngOnInit(): void {
-    // 3. ดึงข้อมูล User Profile ของคนที่ล็อกอินอยู่จริง ณ ปัจจุบัน
-    this.auth.user$.subscribe((user) => {
+    this.auth.user$.pipe(take(1)).subscribe(user => {
       this.currentUser = user;
+    });
+
+    this.route.queryParamMap.pipe(take(1)).subscribe(params => {
+      const idParam = params.get('id');
+
+      if (idParam === null) {
+        return; // สร้างคำขอใหม่
+      }
+
+      const id = Number(idParam);
+
+      if (!Number.isInteger(id) || id <= 0) {
+        Swal.fire('ไม่พบคำขอ', 'รหัสคำขอไม่ถูกต้อง', 'error')
+          .then(() => this.router.navigate(['/dashboard']));
+        return;
+      }
+
+      this.editMode = true;
+      this.requestId = id;
+      this.loadDraft(id);
+    });
+  }
+
+  private loadDraft(id: number): void {
+    this.loadingRequest = true;
+
+    this.requestService.getRequestById(id).subscribe({
+      next: (request: RequestItem) => {
+        // ตรวจซ้ำที่ UI เพื่อไม่ให้เปิดฟอร์มแก้ไขสถานะอื่น
+        if (request.status !== 'DRAFT') {
+          Swal.fire(
+            'แก้ไขไม่ได้',
+            'สามารถแก้ไขได้เฉพาะคำขอที่มีสถานะ DRAFT เท่านั้น',
+            'warning'
+          ).then(() => this.router.navigate(['/dashboard']));
+          return;
+        }
+
+        this.title = request.title || '';
+        this.requestType = request.request_type || 'DATABASE';
+        this.targetSystem = request.target_system || '';
+        this.reason = request.reason || '';
+      },
+      error: err => {
+        console.error('Load draft error:', err);
+
+        Swal.fire(
+          'โหลดข้อมูลไม่สำเร็จ',
+          err.error?.error || 'ไม่สามารถโหลดคำขอได้',
+          'error'
+        ).then(() => this.router.navigate(['/dashboard']));
+      },
+      complete: () => {
+        this.loadingRequest = false;
+      }
     });
   }
 
   onSubmit(): void {
-    if (!this.title.trim() || !this.targetSystem.trim() || !this.reason.trim()) {
+    if (this.isSubmitting || this.loadingRequest) {
+      return;
+    }
+
+    if (
+      !this.title.trim() ||
+      !this.requestType ||
+      !this.targetSystem.trim() ||
+      !this.reason.trim()
+    ) {
       Swal.fire({
         title: 'กรุณากรอกข้อมูลให้ครบถ้วน',
-        text: 'โปรดระบุหัวข้อคำขอ ระบบเป้าหมาย และเหตุผลความจำเป็น',
+        text: 'โปรดระบุหัวข้อ ประเภท ระบบเป้าหมาย และเหตุผล',
         icon: 'warning',
         confirmButtonText: 'ตกลง',
-        confirmButtonColor: '#00a3e0',
-        customClass: { popup: 'swal-ktb-popup' }
+        confirmButtonColor: '#00a3e0'
       });
       return;
     }
 
     Swal.fire({
-      title: 'ยืนยันการบันทึกคำขอ?',
-      text: 'คุณต้องการบันทึกคำขอสิทธิ์นี้เข้าสู่ระบบใช่หรือไม่',
+      title: this.editMode ? 'ยืนยันการแก้ไขคำขอ?' : 'ยืนยันการบันทึกคำขอ?',
+      text: this.editMode
+        ? 'ต้องการบันทึกข้อมูลที่แก้ไขใช่หรือไม่'
+        : 'ต้องการสร้างคำขอสิทธิ์นี้ใช่หรือไม่',
       icon: 'question',
       showCancelButton: true,
-      confirmButtonText: 'ยืนยันการบันทึก',
+      confirmButtonText: this.editMode ? 'บันทึกการแก้ไข' : 'บันทึกคำขอ',
       cancelButtonText: 'ยกเลิก',
       confirmButtonColor: '#00a3e0',
       cancelButtonColor: '#94a3b8',
-      reverseButtons: true,
-      customClass: { popup: 'swal-ktb-popup' }
-    }).then((result) => {
+      reverseButtons: true
+    }).then(result => {
       if (result.isConfirmed) {
         this.executeSave();
       }
@@ -73,40 +139,47 @@ export class CreateRequestComponent implements OnInit {
   private executeSave(): void {
     this.isSubmitting = true;
 
-    // 4. แนบ email และ auth_id ของผู้ใช้ปัจจุบันเข้าไปใน payload
     const payload = {
       title: this.title.trim(),
       request_type: this.requestType,
       target_system: this.targetSystem.trim(),
-      reason: this.reason.trim(),
-      email: this.currentUser?.email,
-      auth_id: this.currentUser?.sub
+      reason: this.reason.trim()
     };
 
-    this.requestService.createRequest(payload).subscribe({
+    const request$ =
+      this.editMode && this.requestId !== null
+        ? this.requestService.updateDraft(this.requestId, payload)
+        : this.requestService.createRequest(payload);
+
+    request$.subscribe({
       next: () => {
         this.isSubmitting = false;
+
         Swal.fire({
-          title: 'บันทึกคำขอสำเร็จ!',
-          text: 'รายการคำขอของคุณถูกสร้างเรียบร้อยแล้ว',
+          title: this.editMode ? 'แก้ไขคำขอสำเร็จ!' : 'บันทึกคำขอสำเร็จ!',
+          text: this.editMode
+            ? 'ข้อมูลคำขอได้รับการแก้ไขแล้ว'
+            : 'สร้างคำขอใหม่เรียบร้อยแล้ว',
           icon: 'success',
           confirmButtonText: 'ตกลง',
-          confirmButtonColor: '#00a3e0',
-          customClass: { popup: 'swal-ktb-popup' }
+          confirmButtonColor: '#00a3e0'
         }).then(() => {
           this.router.navigate(['/dashboard']);
         });
       },
-      error: (err: any) => {
-        console.error('Create Request Error:', err);
+      error: err => {
         this.isSubmitting = false;
+        console.error('Save Request Error:', err);
+
         Swal.fire({
-          title: 'เกิดข้อผิดพลาดในการบันทึก',
-          text: err.error?.error || err.error?.message || err.statusText || 'เซิร์ฟเวอร์ขัดข้อง ไม่สามารถบันทึกข้อมูลได้',
+          title: 'บันทึกไม่สำเร็จ',
+          text:
+            err.error?.error ||
+            err.error?.message ||
+            'ไม่สามารถบันทึกข้อมูลได้ กรุณาลองใหม่',
           icon: 'error',
           confirmButtonText: 'ตกลง',
-          confirmButtonColor: '#00a3e0',
-          customClass: { popup: 'swal-ktb-popup' }
+          confirmButtonColor: '#ef4444'
         });
       }
     });

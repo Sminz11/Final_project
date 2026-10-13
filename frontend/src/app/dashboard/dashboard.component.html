@@ -17,7 +17,7 @@
         </a>
       </div>
 
-      <!-- Main Request Table Card -->
+      <!-- Request Table Card -->
       <div class="dash-card">
         <div class="card-head">
           <div class="card-title-group">
@@ -28,6 +28,7 @@
           </div>
 
           <button
+            type="button"
             class="btn-refresh"
             (click)="loadMyRequests()"
             title="รีเฟรชข้อมูล"
@@ -58,6 +59,7 @@
               class="select-status"
               [(ngModel)]="selectedStatus"
               (change)="applyFilter()"
+              aria-label="กรองตามสถานะ"
             >
               <option value="ALL">สถานะทั้งหมด</option>
               <option value="DRAFT">ร่าง (DRAFT)</option>
@@ -90,6 +92,7 @@
               <tbody>
                 <tr *ngFor="let req of pagedRequests">
                   <td class="req-code">{{ req.req_code }}</td>
+
                   <td class="req-title">{{ req.title }}</td>
 
                   <td>
@@ -121,25 +124,46 @@
                     </span>
                   </td>
 
+                  <!-- Action Buttons -->
                   <td class="text-center">
-                    <button
-                      *ngIf="req.status === 'DRAFT'"
-                      class="btn-submit"
-                      (click)="submitRequest(req.id)"
-                    >
-                      ส่งคำขอ
-                    </button>
+                    <ng-container *ngIf="req.status === 'DRAFT'; else viewButton">
 
-                    <button
-                      *ngIf="req.status !== 'DRAFT'"
-                      class="btn-view"
-                      (click)="openDetailModal(req)"
-                    >
-                      รายละเอียด
-                    </button>
+                      <button
+                        type="button"
+                        class="btn-view"
+                        (click)="editDraft(req)"
+                        title="แก้ไขคำขอฉบับร่าง"
+                      >
+                        <i class="bi bi-pencil-square"></i>
+                        แก้ไข
+                      </button>
+
+                      <button
+                        type="button"
+                        class="btn-submit"
+                        (click)="submitRequest(req.id)"
+                        title="ส่งคำขอเพื่อรออนุมัติ"
+                      >
+                        <i class="bi bi-send"></i>
+                        ส่งคำขอ
+                      </button>
+
+                    </ng-container>
+
+                    <ng-template #viewButton>
+                      <button
+                        type="button"
+                        class="btn-view"
+                        (click)="openDetailModal(req)"
+                      >
+                        <i class="bi bi-eye"></i>
+                        รายละเอียด
+                      </button>
+                    </ng-template>
                   </td>
                 </tr>
 
+                <!-- Empty State -->
                 <tr *ngIf="filteredRequests.length === 0">
                   <td colspan="6" class="empty-state">
                     <i class="bi bi-inbox"></i>
@@ -163,6 +187,7 @@
 
             <div class="pagination-buttons">
               <button
+                type="button"
                 class="btn-pagination"
                 [disabled]="currentPage === 1"
                 (click)="goToPage(currentPage - 1)"
@@ -175,6 +200,7 @@
               </span>
 
               <button
+                type="button"
                 class="btn-pagination"
                 [disabled]="currentPage === totalPages"
                 (click)="goToPage(currentPage + 1)"
@@ -196,9 +222,16 @@
     (click)="closeDetailModal()"
   >
     <div class="modal-card" (click)="$event.stopPropagation()">
+
       <div class="modal-head">
         <h3>รายละเอียดคำขอ {{ selectedDetail?.req_code }}</h3>
-        <button class="btn-close" (click)="closeDetailModal()">
+
+        <button
+          type="button"
+          class="btn-close"
+          (click)="closeDetailModal()"
+          aria-label="ปิดหน้ารายละเอียด"
+        >
           &times;
         </button>
       </div>
@@ -235,7 +268,9 @@
 
           <div class="detail-item full-width">
             <label>เหตุผลในการขอสิทธิ์:</label>
-            <p class="reason-box">{{ selectedDetail.reason || '-' }}</p>
+            <p class="reason-box">
+              {{ selectedDetail.reason || '-' }}
+            </p>
           </div>
 
           <div
@@ -277,13 +312,18 @@
       </p>
 
       <div class="hero-action">
-        <button (click)="login()" class="btn-ktb-primary">
+        <button
+          type="button"
+          (click)="login()"
+          class="btn-ktb-primary"
+        >
           เข้าสู่ระบบด้วย Auth0
           <i class="bi bi-arrow-right"></i>
         </button>
       </div>
 
       <div class="hero-features">
+
         <div class="feature-item">
           <div class="feature-icon">
             <i class="bi bi-shield-lock"></i>
@@ -313,8 +353,8 @@
             <span>มีระบบบันทึก Audit Log ครบถ้วน</span>
           </div>
         </div>
-      </div>
 
+      </div>
     </div>
   </div>
 </ng-template>

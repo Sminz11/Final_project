@@ -2,7 +2,7 @@
 import { Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterModule } from '@angular/router';
+import { Router, RouterModule } from '@angular/router';
 import { AuthService } from '@auth0/auth0-angular';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import Swal from 'sweetalert2';
@@ -21,23 +21,24 @@ export class DashboardComponent implements OnInit {
   myRequests: RequestItem[] = [];
   filteredRequests: RequestItem[] = [];
 
-  searchTerm: string = '';
-  readonly maxSearchLength: number = 150;
+  searchTerm = '';
+  readonly maxSearchLength = 150;
 
-  selectedStatus: string = 'ALL';
-  loadingRequests: boolean = false;
+  selectedStatus = 'ALL';
+  loadingRequests = false;
 
-  // Modal Detail State
+  // Modal รายละเอียดคำขอ
   selectedDetail: RequestItem | null = null;
-  showDetailModal: boolean = false;
+  showDetailModal = false;
 
   // Pagination
-  currentPage: number = 1;
-  pageSize: number = 5;
+  currentPage = 1;
+  pageSize = 5;
   Math = Math;
 
   constructor(
     private requestService: RequestService,
+    private router: Router,
     public auth: AuthService
   ) {}
 
@@ -55,6 +56,7 @@ export class DashboardComponent implements OnInit {
     this.auth.loginWithRedirect();
   }
 
+  // โหลดรายการคำขอของผู้ใช้
   loadMyRequests(): void {
     this.loadingRequests = true;
 
@@ -63,7 +65,7 @@ export class DashboardComponent implements OnInit {
       .subscribe({
         next: (data: RequestItem[]) => {
           this.myRequests = (data || []).map((item: RequestItem) => {
-            const raw = item as Record<string, any>;
+            const raw = item as unknown as Record<string, any>;
 
             return {
               ...item,
@@ -80,11 +82,18 @@ export class DashboardComponent implements OnInit {
         error: (err: unknown) => {
           console.error('Fetch requests error:', err);
           this.loadingRequests = false;
+
+          Swal.fire({
+            title: 'โหลดข้อมูลไม่สำเร็จ',
+            text: 'ไม่สามารถโหลดรายการคำขอได้ กรุณาลองใหม่อีกครั้ง',
+            icon: 'error',
+            confirmButtonText: 'ตกลง'
+          });
         }
       });
   }
 
-  // ค้นหาจากข้อมูลคำขอ
+  // ค้นหาข้อมูลคำขอและกรองตามสถานะ
   applyFilter(): void {
     const term = (this.searchTerm || '')
       .slice(0, this.maxSearchLength)
@@ -93,20 +102,21 @@ export class DashboardComponent implements OnInit {
 
     this.filteredRequests = this.myRequests.filter((req: RequestItem) => {
       const raw = req as unknown as Record<string, unknown>;
-      // ฟิลด์ที่ใช้ค้นหา
+
       const searchableValues: unknown[] = [
         req.id,
         req.req_code,
-        raw['reqCode'],
         req.title,
         req.request_type,
-        raw['requestType'],
         req.target_system,
-        raw['targetSystem'],
         req.status,
         req.reason,
-        raw['reject_reason'],
-        raw['rejectReason'],
+        req.reject_reason,
+        raw['reqCode'],
+        raw['requestType'],
+        raw['targetSystem'],
+        raw['requester_email'],
+        raw['requesterEmail'],
         raw['created_at'],
         raw['createdAt'],
         raw['submitted_at'],
@@ -115,7 +125,7 @@ export class DashboardComponent implements OnInit {
         raw['approvedAt']
       ];
 
-      // เพิ่มฟิลด์ข้อความ ตัวเลข และ boolean อื่น ๆ
+      // รองรับการค้นหาจากฟิลด์อื่นที่ API ส่งกลับมา
       Object.values(raw).forEach((value: unknown) => {
         if (
           typeof value === 'string' ||
@@ -139,20 +149,34 @@ export class DashboardComponent implements OnInit {
       return matchSearch && matchStatus;
     });
 
-    // เปลี่ยนคำค้นหาแล้วกลับไปหน้าแรก
+    // เมื่อค้นหาหรือเปลี่ยนตัวกรอง ให้กลับไปหน้าแรก
     this.currentPage = 1;
   }
 
+  // เปิดหน้าแก้ไขคำขอ โดยส่ง ID ผ่าน query parameter
+  editDraft(req: RequestItem): void {
+    if (req.status !== 'DRAFT') {
+      return;
+    }
+
+    this.router.navigate(['/create-request'], {
+      queryParams: { id: req.id }
+    });
+  }
+
+  // เปิด Modal รายละเอียด
   openDetailModal(item: RequestItem): void {
     this.selectedDetail = item;
     this.showDetailModal = true;
   }
 
+  // ปิด Modal รายละเอียด
   closeDetailModal(): void {
     this.showDetailModal = false;
     this.selectedDetail = null;
   }
 
+  // ข้อมูลเฉพาะหน้าปัจจุบัน
   get pagedRequests(): RequestItem[] {
     const startIndex = (this.currentPage - 1) * this.pageSize;
 
@@ -162,16 +186,19 @@ export class DashboardComponent implements OnInit {
     );
   }
 
+  // จำนวนหน้าทั้งหมด
   get totalPages(): number {
     return Math.ceil(this.filteredRequests.length / this.pageSize) || 1;
   }
 
+  // เปลี่ยนหน้า
   goToPage(page: number): void {
     if (page >= 1 && page <= this.totalPages) {
       this.currentPage = page;
     }
   }
 
+  // สีตามสถานะ
   getStatusStyle(status: string): { [key: string]: string } {
     switch (status) {
       case 'DRAFT':
@@ -206,6 +233,7 @@ export class DashboardComponent implements OnInit {
     }
   }
 
+  // ยืนยันก่อนส่งคำขอ
   submitRequest(requestId: number): void {
     Swal.fire({
       title: 'ยืนยันการส่งคำขอ?',
@@ -224,35 +252,37 @@ export class DashboardComponent implements OnInit {
     });
   }
 
+  // เรียก API ส่งคำขอ
   private executeSubmit(requestId: number): void {
-    this.requestService.submitRequest(requestId).subscribe({
-      next: () => {
-        Swal.fire({
-          title: 'ส่งคำขอสำเร็จ!',
-          text: 'รายการคำขอของคุณถูกส่งไปยังผู้อนุมัติเรียบร้อยแล้ว',
-          icon: 'success',
-          confirmButtonColor: '#00a3e0',
-          confirmButtonText: 'ตกลง',
-          customClass: { popup: 'swal-ktb-popup' }
-        });
+    this.requestService.submitRequest(requestId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          Swal.fire({
+            title: 'ส่งคำขอสำเร็จ!',
+            text: 'รายการคำขอของคุณถูกส่งไปยังผู้อนุมัติเรียบร้อยแล้ว',
+            icon: 'success',
+            confirmButtonColor: '#00a3e0',
+            confirmButtonText: 'ตกลง',
+            customClass: { popup: 'swal-ktb-popup' }
+          });
 
-        this.loadMyRequests();
-      },
+          this.loadMyRequests();
+        },
+        error: (err: any) => {
+          console.error('Submit error:', err);
 
-      error: (err: any) => {
-        console.error('Submit error:', err);
-
-        Swal.fire({
-          title: 'เกิดข้อผิดพลาด!',
-          text:
-            err.error?.error ||
-            err.error?.message ||
-            'ไม่สามารถส่งคำขอได้ กรุณาลองใหม่อีกครั้ง',
-          icon: 'error',
-          confirmButtonColor: '#ef4444',
-          customClass: { popup: 'swal-ktb-popup' }
-        });
-      }
-    });
+          Swal.fire({
+            title: 'เกิดข้อผิดพลาด!',
+            text:
+              err.error?.error ||
+              err.error?.message ||
+              'ไม่สามารถส่งคำขอได้ กรุณาลองใหม่อีกครั้ง',
+            icon: 'error',
+            confirmButtonColor: '#ef4444',
+            customClass: { popup: 'swal-ktb-popup' }
+          });
+        }
+      });
   }
 }
